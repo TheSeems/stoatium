@@ -1,0 +1,347 @@
+From ad5f0b2af1e6f5db86e2f88732be8582f081336b Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Thu, 6 Aug 2026 00:06:04 +0300
+Subject: [PATCH] i18n(ru): translate remaining bare literals; point source
+ links at the fork
+
+A sweep rather than another one-at-a-time fix. Bare literals never reach
+the catalog, so lingui cannot translate them in any locale, and they are
+invisible to a coverage count -- the modal that prompted this had a
+translated body under an English title and English buttons.
+
+Found by scanning for JSX text nodes and string-valued title/text props
+that are not wrapped in <Trans>: the two create/join dialogs, the desktop
+titlebar's connection states, role hoisting, the appearance colour heading
+and font preview, account deletion results, the add-bot warnings, and the
+search and pinned message sidebar titles. Sixteen new catalog entries.
+
+Two incidental fixes. "Bots are not verified by Stoat" was leftover
+branding and now refers to the instance. The font preview pangram is
+translated to a Russian one, which is the point of a pangram -- the Latin
+sentence exercises none of the glyphs a Cyrillic user is previewing.
+
+Source Code links in settings and on the auth page pointed at upstream;
+they now point at this fork, as AGPL-3.0 section 13 requires of a modified
+network service.
+---
+ .../app/interface/desktop/Titlebar.tsx        | 16 ++++---
+ .../app/interface/settings/UserSettings.tsx   |  2 +-
+ .../server/roles/ServerRoleEditor.tsx         |  4 +-
+ .../user/appearance/AppearanceMenu.tsx        |  4 +-
+ .../client/components/auth/src/AuthPage.tsx   |  2 +-
+ .../components/auth/src/flows/FlowDelete.tsx  |  5 +-
+ .../components/i18n/catalogs/ru/messages.po   | 48 +++++++++++++++++++
+ .../client/components/modal/modals/AddBot.tsx |  4 +-
+ .../modal/modals/CreateGroupOrServer.tsx      |  6 +--
+ .../modal/modals/CreateOrJoinServer.tsx       |  6 +--
+ .../interface/channels/text/TextChannel.tsx   |  5 +-
+ 11 files changed, 77 insertions(+), 25 deletions(-)
+
+diff --git a/packages/client/components/app/interface/desktop/Titlebar.tsx b/packages/client/components/app/interface/desktop/Titlebar.tsx
+index a3f30dec..ad743efa 100644
+--- a/packages/client/components/app/interface/desktop/Titlebar.tsx
++++ b/packages/client/components/app/interface/desktop/Titlebar.tsx
+@@ -1,6 +1,8 @@
+ import { Match, Show, Switch, createSignal } from "solid-js";
+ import { Motion, Presence } from "solid-motionone";
+ 
++import { Trans } from "@lingui-solid/solid/macro";
++
+ import { css } from "styled-system/css";
+ import { styled } from "styled-system/jsx";
+ 
+@@ -79,11 +81,11 @@ export function Titlebar() {
+             >
+               <Switch>
+                 <Match when={lifecycle.state() === State.Connecting}>
+-                  Connecting
++                  <Trans>Connecting</Trans>
+                 </Match>
+                 {/* <Match when={lifecycle.state() === State.Connected}>Connected</Match> */}
+                 <Match when={lifecycle.state() === State.Disconnected}>
+-                  Disconnected
++                  <Trans>Disconnected</Trans>
+                   <a
+                     onClick={() =>
+                       lifecycle.transition({
+@@ -91,14 +93,14 @@ export function Titlebar() {
+                       })
+                     }
+                   >
+-                    <strong> (reconnect now)</strong>
++                    <strong>{" "}<Trans>(reconnect now)</Trans></strong>
+                   </a>
+                 </Match>
+                 <Match when={lifecycle.state() === State.Reconnecting}>
+-                  Reconnecting
++                  <Trans>Reconnecting</Trans>
+                 </Match>
+                 <Match when={lifecycle.state() === State.Offline}>
+-                  Device is offline
++                  <Trans>Device is offline</Trans>
+                   <a
+                     onClick={() =>
+                       lifecycle.transition({
+@@ -109,7 +111,7 @@ export function Titlebar() {
+                       "-webkit-app-region": "no-drag",
+                     }}
+                   >
+-                    <strong> (reconnect now)</strong>
++                    <strong>{" "}<Trans>(reconnect now)</Trans></strong>
+                   </a>
+                 </Match>
+               </Switch>
+@@ -121,7 +123,7 @@ export function Titlebar() {
+                   }}
+                 >
+                   <Button size="sm" onPress={pendingUpdate()}>
+-                    Update
++                    <Trans>Update</Trans>
+                   </Button>
+                 </div>
+               </Show>
+diff --git a/packages/client/components/app/interface/settings/UserSettings.tsx b/packages/client/components/app/interface/settings/UserSettings.tsx
+index 62b7e38a..5367626a 100644
+--- a/packages/client/components/app/interface/settings/UserSettings.tsx
++++ b/packages/client/components/app/interface/settings/UserSettings.tsx
+@@ -271,7 +271,7 @@ const Config: SettingsConfiguration<{ server: Server }> = {
+               // it at wherever this fork is published before handing out
+               // accounts; leaving it on upstream would misrepresent what is
+               // running here.
+-              href: "https://github.com/stoatchat",
++              href: "https://github.com/TheSeems/stoatium",
+               icon: <MdMemory {...iconSize(20)} />,
+               title: <Trans>Source Code</Trans>,
+             },
+diff --git a/packages/client/components/app/interface/settings/server/roles/ServerRoleEditor.tsx b/packages/client/components/app/interface/settings/server/roles/ServerRoleEditor.tsx
+index 7e5fa909..0c51039a 100644
+--- a/packages/client/components/app/interface/settings/server/roles/ServerRoleEditor.tsx
++++ b/packages/client/components/app/interface/settings/server/roles/ServerRoleEditor.tsx
+@@ -200,9 +200,9 @@ export function ServerRoleEditor(props: { context: Server; roleId: string }) {
+           />
+ 
+           <Column>
+-            <Text class="label">Hoist Role</Text>
++            <Text class="label"><Trans>Hoist Role</Trans></Text>
+             <Form2.Checkbox control={editGroup.controls.hoist}>
+-              Display this role above others
++              <Trans>Display this role above others</Trans>
+             </Form2.Checkbox>
+           </Column>
+ 
+diff --git a/packages/client/components/app/interface/settings/user/appearance/AppearanceMenu.tsx b/packages/client/components/app/interface/settings/user/appearance/AppearanceMenu.tsx
+index faad9b48..a07bbef8 100644
+--- a/packages/client/components/app/interface/settings/user/appearance/AppearanceMenu.tsx
++++ b/packages/client/components/app/interface/settings/user/appearance/AppearanceMenu.tsx
+@@ -54,7 +54,7 @@ export function AppearanceMenu() {
+ 
+       <Column>
+         <Text class="title" size="small">
+-          Colours
++          <Trans>Colours</Trans>
+         </Text>
+ 
+         <Row justify="stretch">
+@@ -317,7 +317,7 @@ export function AppearanceMenu() {
+               isLink="hide"
+             >
+               <code class={css({ fontFamily: `var(--fonts-monospace)` })}>
+-                The quick brown fox jumped over the lazy dog
++                <Trans>The quick brown fox jumped over the lazy dog</Trans>
+               </code>
+             </MessageContainer>
+           </MessagePreview>
+diff --git a/packages/client/components/auth/src/AuthPage.tsx b/packages/client/components/auth/src/AuthPage.tsx
+index fb970263..18929e43 100644
+--- a/packages/client/components/auth/src/AuthPage.tsx
++++ b/packages/client/components/auth/src/AuthPage.tsx
+@@ -147,7 +147,7 @@ export function AuthPage(props: { children: JSX.Element }) {
+         <Nav>
+           <NavItems variant="stack">
+             <NavItems>
+-              <LinkWithIcon href="https://github.com/stoatchat" target="_blank">
++              <LinkWithIcon href="https://github.com/TheSeems/stoatium" target="_blank">
+                 <BiLogosGithub size={24} />
+               </LinkWithIcon>
+               <LinkWithIcon
+diff --git a/packages/client/components/auth/src/flows/FlowDelete.tsx b/packages/client/components/auth/src/flows/FlowDelete.tsx
+index 8c577cec..6f1f500d 100644
+--- a/packages/client/components/auth/src/flows/FlowDelete.tsx
++++ b/packages/client/components/auth/src/flows/FlowDelete.tsx
+@@ -1,4 +1,5 @@
+ import { Match, Switch, createSignal, onMount } from "solid-js";
++import { Trans } from "@lingui-solid/solid/macro";
+ 
+ import { useApi } from "@revolt/client";
+ import { useParams } from "@revolt/routing";
+@@ -28,10 +29,10 @@ export default function FlowDeleteAccount() {
+       <span>
+         <Switch fallback={"Please wait..."}>
+           <Match when={deleted() === "error"}>
+-            Error occurred, please email support.
++            <Trans>Error occurred, please email support.</Trans>
+           </Match>
+           <Match when={deleted() === true}>
+-            Account has been queued for deletion!
++            <Trans>Account has been queued for deletion!</Trans>
+           </Match>
+         </Switch>
+       </span>
+diff --git a/packages/client/components/i18n/catalogs/ru/messages.po b/packages/client/components/i18n/catalogs/ru/messages.po
+index 096d6307..ccf40d19 100644
+--- a/packages/client/components/i18n/catalogs/ru/messages.po
++++ b/packages/client/components/i18n/catalogs/ru/messages.po
+@@ -3648,3 +3648,51 @@ msgstr "Исходящие"
+ 
+ msgid "Search messages..."
+ msgstr "Поиск сообщений…"
++
++msgid "Group"
++msgstr "Группа"
++
++msgid "Server"
++msgstr "Сервер"
++
++msgid "Create or join a server"
++msgstr "Создать сервер или присоединиться"
++
++msgid "Device is offline"
++msgstr "Устройство не в сети"
++
++msgid "Update"
++msgstr "Обновить"
++
++msgid "(reconnect now)"
++msgstr "(переподключиться)"
++
++msgid "Hoist Role"
++msgstr "Выделение роли"
++
++msgid "Display this role above others"
++msgstr "Отображать эту роль выше остальных"
++
++msgid "Colours"
++msgstr "Цвета"
++
++msgid "The quick brown fox jumped over the lazy dog"
++msgstr "Съешь же ещё этих мягких французских булок да выпей чаю"
++
++msgid "Error occurred, please email support."
++msgstr "Произошла ошибка, напишите в поддержку."
++
++msgid "Account has been queued for deletion!"
++msgstr "Аккаунт поставлен в очередь на удаление!"
++
++msgid "Bots are not verified by this instance."
++msgstr "Боты не проверяются этим сервером."
++
++msgid "The bot will not be granted any permissions."
++msgstr "Боту не будут выданы никакие права."
++
++msgid "Search Results"
++msgstr "Результаты поиска"
++
++msgid "Pinned Messages"
++msgstr "Закреплённые сообщения"
+diff --git a/packages/client/components/modal/modals/AddBot.tsx b/packages/client/components/modal/modals/AddBot.tsx
+index 78834d26..0e0b2821 100644
+--- a/packages/client/components/modal/modals/AddBot.tsx
++++ b/packages/client/components/modal/modals/AddBot.tsx
+@@ -156,10 +156,10 @@ export function AddBotModal(props: DialogProps & Modals & { type: "add_bot" }) {
+ 
+           <Column gap="sm" align>
+             <Text class="label" size="small">
+-              Bots are not verified by Stoat.
++              <Trans>Bots are not verified by this instance.</Trans>
+             </Text>
+             <Text class="label" size="small">
+-              The bot will not be granted any permissions.
++              <Trans>The bot will not be granted any permissions.</Trans>
+             </Text>
+           </Column>
+         </Column>
+diff --git a/packages/client/components/modal/modals/CreateGroupOrServer.tsx b/packages/client/components/modal/modals/CreateGroupOrServer.tsx
+index 7ff33d68..23d41734 100644
+--- a/packages/client/components/modal/modals/CreateGroupOrServer.tsx
++++ b/packages/client/components/modal/modals/CreateGroupOrServer.tsx
+@@ -17,10 +17,10 @@ export function CreateGroupOrServer(
+     <Dialog
+       show={props.show}
+       onClose={props.onClose}
+-      title="Create a group or server"
++      title={<Trans>Create a group or server</Trans>}
+       actions={[
+         {
+-          text: "Group",
++          text: <Trans>Group</Trans>,
+           onClick: () => {
+             openModal({
+               type: "create_group",
+@@ -29,7 +29,7 @@ export function CreateGroupOrServer(
+           },
+         },
+         {
+-          text: "Server",
++          text: <Trans>Server</Trans>,
+           onClick: () => {
+             openModal({
+               type: "create_server",
+diff --git a/packages/client/components/modal/modals/CreateOrJoinServer.tsx b/packages/client/components/modal/modals/CreateOrJoinServer.tsx
+index d4691e3d..0d6ed800 100644
+--- a/packages/client/components/modal/modals/CreateOrJoinServer.tsx
++++ b/packages/client/components/modal/modals/CreateOrJoinServer.tsx
+@@ -17,10 +17,10 @@ export function CreateOrJoinServerModal(
+     <Dialog
+       show={props.show}
+       onClose={props.onClose}
+-      title="Create or join a server"
++      title={<Trans>Create or join a server</Trans>}
+       actions={[
+         {
+-          text: "Create",
++          text: <Trans>Create</Trans>,
+           onClick: () => {
+             openModal({
+               type: "create_server",
+@@ -29,7 +29,7 @@ export function CreateOrJoinServerModal(
+           },
+         },
+         {
+-          text: "Join",
++          text: <Trans>Join</Trans>,
+           onClick: () => {
+             openModal({ type: "join_server", client: props.client });
+           },
+diff --git a/packages/client/src/interface/channels/text/TextChannel.tsx b/packages/client/src/interface/channels/text/TextChannel.tsx
+index a32b3e75..ba22dfc4 100644
+--- a/packages/client/src/interface/channels/text/TextChannel.tsx
++++ b/packages/client/src/interface/channels/text/TextChannel.tsx
+@@ -7,6 +7,7 @@ import {
+   on,
+   onCleanup,
+ } from "solid-js";
++import { Trans } from "@lingui-solid/solid/macro";
+ 
+ import { cva } from "styled-system/css";
+ import { styled } from "styled-system/jsx";
+@@ -248,7 +249,7 @@ export function TextChannel(props: ChannelPageProps) {
+                 <WideSidebarContainer>
+                   <SidebarTitle>
+                     <Text class="label" size="large">
+-                      Search Results
++                      <Trans>Search Results</Trans>
+                     </Text>
+                   </SidebarTitle>
+                   <TextSearchSidebar
+@@ -263,7 +264,7 @@ export function TextChannel(props: ChannelPageProps) {
+                 <WideSidebarContainer>
+                   <SidebarTitle>
+                     <Text class="label" size="large">
+-                      Pinned Messages
++                      <Trans>Pinned Messages</Trans>
+                     </Text>
+                   </SidebarTitle>
+                   <TextSearchSidebar
+-- 
+2.49.0.windows.1
+

@@ -1,0 +1,58 @@
+From 0e2d2ce4fc7db9098ab81706b2be8de163c38db1 Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Sat, 1 Aug 2026 17:10:02 +0300
+Subject: [PATCH 3/3] fix: make auto-update opt-in
+
+update-electron-app reads `repository` from package.json and queries
+update.electronjs.org. Left as-is, a fork either errors on every launch or
+silently pulls upstream builds. Now gated on STOATIUM_UPDATE_REPO.
+---
+ forge.env.d.ts      |  2 ++
+ src/main.ts         | 10 ++++++++--
+ vite.main.config.ts |  3 +++
+ 3 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/forge.env.d.ts b/forge.env.d.ts
+index 0ad35df..d54979c 100644
+--- a/forge.env.d.ts
++++ b/forge.env.d.ts
+@@ -10,3 +10,5 @@ declare const STOATIUM_PRODUCT_NAME: string;
+ declare const STOATIUM_APP_ID: string;
+ /** Discord application ID for Rich Presence; empty disables the feature. */
+ declare const STOATIUM_DISCORD_APP_ID: string;
++/** GitHub "owner/name" to check for updates; empty disables auto-update. */
++declare const STOATIUM_UPDATE_REPO: string;
+diff --git a/src/main.ts b/src/main.ts
+index 47b56f1..0bb5d6a 100644
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -35,8 +35,14 @@ const onNotifyUser = (_info: IUpdateInfo) => {
+ };
+ 
+ if (acquiredLock) {
+-  // start auto update logic
+-  updateElectronApp({ onNotifyUser });
++  // Auto-update is opt-in for forks. update-electron-app defaults to the
++  // `repository` field in package.json and talks to update.electronjs.org,
++  // which needs a public repo publishing releases — a private or unpublished
++  // fork would just error on every launch. Set STOATIUM_UPDATE_REPO to
++  // "owner/name" at build time to enable it.
++  if (STOATIUM_UPDATE_REPO) {
++    updateElectronApp({ repo: STOATIUM_UPDATE_REPO, onNotifyUser });
++  }
+ 
+   // create and configure the app when electron is ready
+   app.on("ready", () => {
+diff --git a/vite.main.config.ts b/vite.main.config.ts
+index 9950a04..7c3e635 100644
+--- a/vite.main.config.ts
++++ b/vite.main.config.ts
+@@ -21,5 +21,8 @@ export default defineConfig({
+     // Empty by default: Discord Rich Presence stays off unless the fork
+     // registers its own Discord application.
+     STOATIUM_DISCORD_APP_ID: define(process.env.STOATIUM_DISCORD_APP_ID, ""),
++    // Empty by default: auto-update stays off unless the fork publishes
++    // releases to a public GitHub repo.
++    STOATIUM_UPDATE_REPO: define(process.env.STOATIUM_UPDATE_REPO, ""),
+   },
+ });

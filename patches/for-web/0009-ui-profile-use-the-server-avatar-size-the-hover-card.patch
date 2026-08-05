@@ -1,0 +1,171 @@
+From 98a136349a3e9fa72583860e2208b68d81df46a7 Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Wed, 5 Aug 2026 19:30:53 +0300
+Subject: [PATCH] ui(profile): use the server avatar, size the hover card to
+ its content
+
+The hover card was already handed the ServerMember and used it for the
+nickname, but took the picture from the global user -- so someone with a
+per-server avatar showed it everywhere except on their own profile.
+userInformation() has resolved this correctly all along as
+member?.animatedAvatarURL ?? user?.animatedAvatarURL; the banner now does
+the same, and clicking through to the full-size image opens whichever
+avatar is on screen.
+
+The card itself was a flat height: 400px, wrong in both directions -- a
+user with no status, badges or bio left most of it empty, while one with a
+few cards had the last sliced through the middle. It now sizes to content
+and scrolls only past a cap.
+
+Its grid drops to one column: at 340px wide, two columns meant ~150px
+tiles, too narrow for a role name or a date, and any card without a
+neighbour left a hole beside it. With one column, the remaining "1 / 3"
+spans would have conjured a phantom second column, so every span is now
+relative to the end of the row.
+---
+ .../components/modal/modals/UserProfile.tsx   |  7 +++++--
+ .../features/profiles/ProfileActions.tsx      |  2 +-
+ .../features/profiles/ProfileBanner.tsx       | 20 +++++++++++++++----
+ .../features/profiles/ProfileCard.tsx         |  4 +++-
+ .../features/profiles/ProfileJoined.tsx       |  4 +++-
+ .../ui/components/floating/UserCard.tsx       | 11 ++++++++--
+ 6 files changed, 37 insertions(+), 11 deletions(-)
+
+diff --git a/packages/client/components/modal/modals/UserProfile.tsx b/packages/client/components/modal/modals/UserProfile.tsx
+index 0ba085b8..136e1d12 100644
+--- a/packages/client/components/modal/modals/UserProfile.tsx
++++ b/packages/client/components/modal/modals/UserProfile.tsx
+@@ -38,8 +38,11 @@ export function UserProfileModal(
+           onClickAvatar={(e) => {
+             e.stopPropagation();
+ 
+-            if (props.user.avatar) {
+-              openModal({ type: "image_viewer", file: props.user.avatar });
++            // Show whichever avatar is actually on screen: the server profile
++            // one when the member has set it, the global one otherwise.
++            const avatar = props.member?.avatar ?? props.user.avatar;
++            if (avatar) {
++              openModal({ type: "image_viewer", file: avatar });
+             }
+           }}
+         />
+diff --git a/packages/client/components/ui/components/features/profiles/ProfileActions.tsx b/packages/client/components/ui/components/features/profiles/ProfileActions.tsx
+index 2107ecdd..6ea4a1cb 100644
+--- a/packages/client/components/ui/components/features/profiles/ProfileActions.tsx
++++ b/packages/client/components/ui/components/features/profiles/ProfileActions.tsx
+@@ -126,7 +126,7 @@ const Actions = styled("div", {
+         gridColumn: "1 / -1",
+       },
+       2: {
+-        gridColumn: "1 / 3",
++        gridColumn: "1 / -1",
+       },
+     },
+   },
+diff --git a/packages/client/components/ui/components/features/profiles/ProfileBanner.tsx b/packages/client/components/ui/components/features/profiles/ProfileBanner.tsx
+index c5aaad30..00d312ce 100644
+--- a/packages/client/components/ui/components/features/profiles/ProfileBanner.tsx
++++ b/packages/client/components/ui/components/features/profiles/ProfileBanner.tsx
+@@ -51,12 +51,21 @@ export function ProfileBanner(props: {
+       </Show>
+ 
+       <Row align gap="lg">
++        {/*
++          Server profiles can carry their own avatar, and this component is
++          already handed the member -- it used it for the nickname just below
++          but took the picture from the global user, so a per-server avatar
++          showed everywhere except here. Same precedence as
++          userInformation(): member first, user as the fallback.
++        */}
+         <Avatar
+-          src={props.user.animatedAvatarURL}
++          src={props.member?.animatedAvatarURL ?? props.user.animatedAvatarURL}
+           size={48}
+           holepunch="bottom-right"
+           onClick={props.onClickAvatar}
+-          interactive={props.user.avatar && !!props.onClickAvatar}
++          interactive={
++            (props.member?.avatar ?? props.user.avatar) && !!props.onClickAvatar
++          }
+           overlay={<UserStatus.Graphic status={props.user.presence} />}
+         />
+         <UserShort>
+@@ -110,11 +119,14 @@ const Banner = styled("div", {
+   },
+   variants: {
+     width: {
++      // See ProfileCard: these cards live in both a three-column grid (the
++      // profile modal) and a one-column one (the hover card), so the span has
++      // to be expressed relative to the end of the row.
+       3: {
+-        gridColumn: "1 / 4",
++        gridColumn: "1 / -1",
+       },
+       2: {
+-        gridColumn: "1 / 3",
++        gridColumn: "1 / -1",
+       },
+     },
+     isLink: {
+diff --git a/packages/client/components/ui/components/features/profiles/ProfileCard.tsx b/packages/client/components/ui/components/features/profiles/ProfileCard.tsx
+index 37753b21..2c9a61e3 100644
+--- a/packages/client/components/ui/components/features/profiles/ProfileCard.tsx
++++ b/packages/client/components/ui/components/features/profiles/ProfileCard.tsx
+@@ -31,7 +31,9 @@ export const ProfileCard = styled("div", {
+         minWidth: 0,
+       },
+       2: {
+-        gridColumn: "1 / 3",
++        // Only ever used in the hover card, which is now a single column, so
++        // a hardcoded line 3 would conjure a phantom second column there.
++        gridColumn: "1 / -1",
+       },
+       3: {
+         // Not "1 / 4": this card is used in two grids, the profile modal's
+diff --git a/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx b/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx
+index 06e60fbb..3357c832 100644
+--- a/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx
++++ b/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx
+@@ -94,7 +94,9 @@ const Entries = styled("div", {
+ const Entry = styled("div", {
+   base: {
+     minWidth: 0,
+-    flex: "1 1 140px",
++    // 110, not 140: two dates have to fit side by side inside the 340px hover
++    // card as well as the wider modal, or they wrap to separate lines there.
++    flex: "1 1 110px",
+     display: "flex",
+     flexDirection: "column",
+     gap: "2px",
+diff --git a/packages/client/components/ui/components/floating/UserCard.tsx b/packages/client/components/ui/components/floating/UserCard.tsx
+index a9789ab9..928573a2 100644
+--- a/packages/client/components/ui/components/floating/UserCard.tsx
++++ b/packages/client/components/ui/components/floating/UserCard.tsx
+@@ -20,8 +20,12 @@ const base = cva({
+     background: "var(--md-sys-color-surface-container-high)",
+     boxShadow: "0 0 3px var(--md-sys-color-shadow)",
+ 
++    // Was a flat height: 400px, which is wrong in both directions: a user
++    // with no status, badges or bio left most of the card empty, while one
++    // with a few cards had the last one sliced through the middle. Size to
++    // content and only scroll past the cap.
+     width: "340px",
+-    height: "400px",
++    maxHeight: "min(480px, 70vh)",
+ 
+     borderRadius: "var(--borderRadius-xl)",
+   },
+@@ -90,6 +94,9 @@ const Grid = styled("div", {
+     display: "grid",
+     gap: "var(--gap-md)",
+     padding: "var(--gap-md)",
+-    gridTemplateColumns: "repeat(2, 1fr)",
++    // One column, not two. The card is 340px wide, so a two-column split gave
++    // ~150px tiles -- too narrow for a role name or a date -- and any card
++    // without a neighbour left a visible hole beside it.
++    gridTemplateColumns: "1fr",
+   },
+ });
+-- 
+2.49.0.windows.1
+

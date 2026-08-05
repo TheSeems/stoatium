@@ -1,0 +1,15 @@
+# Upstream is cloned, never vendored. scripts/prepare.ps1 recreates it.
+/build/
+
+node_modules/
+out/
+.vite/
+*.log
+
+# Instance secrets - never commit
+deploy/k8s/secrets.env
+
+# Instance-specific deployment: manifests, nftables tables and deploy scripts
+# name real hosts, node names and addresses. Kept local, never published.
+# AGPL-3.0 covers the client source (patches/ + scripts/), not this.
+/deploy/

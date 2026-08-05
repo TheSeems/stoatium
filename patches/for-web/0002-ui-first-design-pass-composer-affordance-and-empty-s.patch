@@ -1,0 +1,119 @@
+From 47affbf94cbb2b7c273cf2a9696e06b3bc3a4f0f Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Sun, 2 Aug 2026 14:18:48 +0300
+Subject: ui: first design pass -- composer affordance and empty states
+
+The friends list sat top-left in a wide empty pane; it now has a measure cap
+and is centred, so rows are a readable length instead of stretching edge to
+edge. The empty placeholder was a disabled ListItem that read as a broken
+greyed-out row; it is now a panel that occupies the space.
+
+The composer had 4px/8px padding against a 28px corner radius and no focus
+affordance at all -- nothing indicated it was taking input.
+---
+ .../messaging/composition/MessageBox.tsx      | 14 ++++++--
+ packages/client/src/interface/Friends.tsx     | 36 +++++++++++++++++--
+ 2 files changed, 45 insertions(+), 5 deletions(-)
+
+diff --git a/packages/client/components/ui/components/features/messaging/composition/MessageBox.tsx b/packages/client/components/ui/components/features/messaging/composition/MessageBox.tsx
+index faa6df19..03089068 100644
+--- a/packages/client/components/ui/components/features/messaging/composition/MessageBox.tsx
++++ b/packages/client/components/ui/components/features/messaging/composition/MessageBox.tsx
+@@ -97,12 +97,22 @@ const Base = styled("div", {
+     flexGrow: 1,
+     minWidth: 0,
+ 
+-    padding: "var(--gap-sm) var(--gap-md)",
++    // 4px/8px read as cramped against a 28px corner radius; this gives the
++    // field a touch target proportional to its own rounding.
++    padding: "var(--gap-l) var(--gap-lg)",
+     borderStartRadius: "var(--borderRadius-xl)",
+ 
+     display: "flex",
+     background: "var(--md-sys-color-surface-container-high)",
+     color: "var(--md-sys-color-on-surface)",
++
++    // The composer had no focus affordance at all -- nothing indicated it was
++    // accepting input. An inset ring avoids changing layout on focus.
++    transition: "box-shadow var(--transitions-fast), background var(--transitions-fast)",
++    "&:focus-within": {
++      background: "var(--md-sys-color-surface-container-highest)",
++      boxShadow: "inset 0 0 0 2px var(--md-sys-color-primary)",
++    },
+   },
+   variants: {
+     hasActionsAppend: {
+@@ -126,7 +136,7 @@ const Parent = styled("div", {
+ 
+     display: "flex",
+     gap: "var(--gap-md)",
+-    margin: "0 0 var(--gap-md) 0",
++    margin: "0 0 var(--gap-l) 0",
+     maxHeight: "var(--layout-height-message-box)",
+   },
+ });
+diff --git a/packages/client/src/interface/Friends.tsx b/packages/client/src/interface/Friends.tsx
+index 9f14119c..bbb985c4 100644
+--- a/packages/client/src/interface/Friends.tsx
++++ b/packages/client/src/interface/Friends.tsx
+@@ -47,7 +47,14 @@ const Base = styled("div", {
+ 
+     "& .FriendsList": {
+       height: "100%",
+-      paddingInline: "var(--gap-lg)",
++      width: "100%",
++      paddingInline: "var(--gap-x)",
++      paddingBlock: "var(--gap-l)",
++      // Left-aligned against a wide viewport the list sat in the top-left
++      // corner of a mostly empty pane. Centring it with a measure cap keeps
++      // rows a readable length instead of stretching them edge to edge.
++      maxWidth: "960px",
++      marginInline: "auto",
+     },
+   },
+ });
+@@ -226,9 +233,9 @@ function People(props: {
+       </ListSubheader>
+ 
+       <Show when={props.users.length === 0}>
+-        <ListItem disabled>
++        <EmptyState>
+           <Trans>Nobody here right now!</Trans>
+-        </ListItem>
++        </EmptyState>
+       </Show>
+ 
+       <VirtualContainer
+@@ -267,6 +274,29 @@ const ContainerListEntry = styled("div", {
+   },
+ });
+ 
++/**
++ * Placeholder shown when a friends list is empty.
++ *
++ * Previously a disabled ListItem, which rendered as a greyed-out row pinned to
++ * the top-left of an otherwise empty pane. A dashed panel that occupies the
++ * space reads as "nothing here yet" rather than as a broken row.
++ */
++const EmptyState = styled("div", {
++  base: {
++    display: "flex",
++    alignItems: "center",
++    justifyContent: "center",
++    minHeight: "180px",
++    marginBlock: "var(--gap-l)",
++    padding: "var(--gap-x)",
++    borderRadius: "var(--borderRadius-lg)",
++    border: "1px dashed var(--md-sys-color-outline-variant)",
++    background: "var(--md-sys-color-surface-container-low)",
++    color: "var(--md-sys-color-on-surface-variant)",
++    textAlign: "center",
++  },
++});
++
+ /**
+  * Single user entry
+  */
+-- 
+2.49.0.windows.1
+

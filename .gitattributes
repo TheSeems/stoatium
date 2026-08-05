@@ -1,0 +1,8 @@
+# Keep everything LF, so patches regenerated on Windows match those
+# regenerated on Linux and the series does not churn.
+* text=auto eol=lf
+
+# Patches MUST stay byte-exact. If Git ever checks them out with CRLF, every
+# hunk mismatches the upstream tree and `git am` fails with "does not apply".
+# This rule comes last deliberately: in .gitattributes, later wins.
+*.patch -text

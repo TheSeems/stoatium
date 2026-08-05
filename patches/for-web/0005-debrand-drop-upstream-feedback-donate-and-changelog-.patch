@@ -1,0 +1,174 @@
+From 65aa381f70feec96a15c0e129d759d8463fcff75 Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Sun, 2 Aug 2026 14:41:52 +0300
+Subject: debrand: drop upstream feedback, donate and changelog entries
+
+This instance is not stoat.chat. Feedback pointed at upstream's GitHub
+discussions, where reports about a modified self-hosted build are noise;
+Donate pointed at upstream's ko-fi, and soliciting donations to a third
+party from inside a private instance is not this build's business; What's
+New fetched a changelog describing releases this instance does not track.
+
+The "Stoat" settings category becomes "Integrations", the desktop version
+label drops the product name, and the page title and PWA manifest are
+neutral.
+
+Source Code is deliberately kept. Stoat is AGPL-3.0 and this is a modified
+version offered to users over a network, which is what section 13 covers:
+those users must be offered the corresponding source of THIS build. The
+href still points upstream and must be repointed at wherever this fork is
+published before accounts are handed out.
+---
+ .../app/interface/settings/UserSettings.tsx   | 45 +++++++------------
+ packages/client/index.html                    |  2 +-
+ packages/client/vite.config.ts                |  6 +--
+ 3 files changed, 21 insertions(+), 32 deletions(-)
+
+diff --git a/packages/client/components/app/interface/settings/UserSettings.tsx b/packages/client/components/app/interface/settings/UserSettings.tsx
+index 01a503f5..62b7e38a 100644
+--- a/packages/client/components/app/interface/settings/UserSettings.tsx
++++ b/packages/client/components/app/interface/settings/UserSettings.tsx
+@@ -8,20 +8,16 @@ import { useClient, useClientLifecycle } from "@revolt/client";
+ import { CONFIGURATION } from "@revolt/common";
+ import { useUser } from "@revolt/markdown/users";
+ import { useModals } from "@revolt/modal";
+-import { fetchLatestChangelog } from "@revolt/modal/modals/Changelog";
+ import { ColouredText, Column, Text, iconSize } from "@revolt/ui";
+ import { Symbol } from "@revolt/ui/components/utils/Symbol";
+ 
+ import MdAccountCircle from "@material-design-icons/svg/outlined/account_circle.svg?component-solid";
+-import MdCampaign from "@material-design-icons/svg/outlined/campaign.svg?component-solid";
+-import MdCoffee from "@material-design-icons/svg/outlined/coffee.svg?component-solid";
+ import MdLanguage from "@material-design-icons/svg/outlined/language.svg?component-solid";
+ import MdLogout from "@material-design-icons/svg/outlined/logout.svg?component-solid";
+ import MdMemory from "@material-design-icons/svg/outlined/memory.svg?component-solid";
+ import MdMic from "@material-design-icons/svg/outlined/mic.svg?component-solid";
+ import MdNotifications from "@material-design-icons/svg/outlined/notifications.svg?component-solid";
+ import MdPalette from "@material-design-icons/svg/outlined/palette.svg?component-solid";
+-import MdRateReview from "@material-design-icons/svg/outlined/rate_review.svg?component-solid";
+ import MdScience from "@material-design-icons/svg/outlined/science.svg?component-solid";
+ import MdSmartToy from "@material-design-icons/svg/outlined/smart_toy.svg?component-solid";
+ import MdVerifiedUser from "@material-design-icons/svg/outlined/verified_user.svg?component-solid";
+@@ -35,7 +31,6 @@ import { MyAccount } from "./user/Account";
+ import AdvancedSettings from "./user/Advanced";
+ import { AppearanceMenu } from "./user/appearance";
+ import { MyBots, ViewBot } from "./user/bots";
+-import { Feedback } from "./user/Feedback";
+ import { LanguageSettings } from "./user/Language";
+ import Native from "./user/Native";
+ import Notifications from "./user/notifications/Notifications";
+@@ -90,8 +85,6 @@ const Config: SettingsConfiguration<{ server: Server }> = {
+         return <MyBots />;
+       case "language":
+         return <LanguageSettings />;
+-      case "feedback":
+-        return <Feedback />;
+       case "subscribe":
+         return <EditSubscription />;
+       case "native":
+@@ -134,7 +127,7 @@ const Config: SettingsConfiguration<{ server: Server }> = {
+           </Text>
+           <Show when={window.native}>
+             <Text class="label">
+-              Stoat for Desktop {window.native.versions.desktop()}
++              <Trans>Desktop app</Trans> {window.native.versions.desktop()}
+             </Text>
+             <Text class="label">
+               <span
+@@ -175,18 +168,16 @@ const Config: SettingsConfiguration<{ server: Server }> = {
+           ],
+         },
+         {
+-          title: "Stoat",
++          // Was the literal "Stoat". This instance is not stoat.chat and the
++          // feedback entry pointed at upstream's GitHub discussions, where
++          // reports about a modified self-hosted build are noise.
++          title: <Trans>Integrations</Trans>,
+           entries: [
+             {
+               id: "bots",
+               icon: <MdSmartToy {...iconSize(20)} />,
+               title: <Trans>My Bots</Trans>,
+             },
+-            {
+-              id: "feedback",
+-              icon: <MdRateReview {...iconSize(20)} />,
+-              title: <Trans>Feedback</Trans>,
+-            },
+           ],
+         },
+         {
+@@ -270,16 +261,16 @@ const Config: SettingsConfiguration<{ server: Server }> = {
+         },
+         {
+           entries: [
++            // "What's New" fetched upstream's changelog, which describes
++            // releases this instance does not track.
+             {
+-              onClick: async () => {
+-                const changelog = await fetchLatestChangelog();
+-                if (!changelog) return;
+-                openModal({ type: "changelog", changelog });
+-              },
+-              icon: <MdCampaign {...iconSize(20)} />,
+-              title: <Trans>What's New</Trans>,
+-            },
+-            {
++              // Kept, and deliberately so. Stoat is AGPL-3.0 and this is a
++              // modified version offered to users over a network, which is
++              // exactly what section 13 covers: those users must be offered
++              // the corresponding source of THIS build, not upstream's. Point
++              // it at wherever this fork is published before handing out
++              // accounts; leaving it on upstream would misrepresent what is
++              // running here.
+               href: "https://github.com/stoatchat",
+               icon: <MdMemory {...iconSize(20)} />,
+               title: <Trans>Source Code</Trans>,
+@@ -289,11 +280,9 @@ const Config: SettingsConfiguration<{ server: Server }> = {
+               icon: <MdScience {...iconSize(20)} />,
+               title: <Trans>Advanced</Trans>,
+             },
+-            {
+-              href: "https://ko-fi.com/stoatchat",
+-              icon: <MdCoffee {...iconSize(20)} />,
+-              title: <Trans>Donate</Trans>,
+-            },
++            // Donate pointed at upstream's ko-fi. Soliciting donations to a
++            // third party from inside someone else's private instance is not
++            // something this build should do.
+             {
+               id: "logout",
+               icon: (
+diff --git a/packages/client/index.html b/packages/client/index.html
+index a9873643..8c0fa017 100644
+--- a/packages/client/index.html
++++ b/packages/client/index.html
+@@ -10,7 +10,7 @@
+       type="image/png"
+       href="./public/assets/web/icon.ico"
+     />
+-    <title>Stoat</title>
++    <title>Chat</title>
+   </head>
+   <body>
+     <noscript>You need to enable JavaScript to run this app.</noscript>
+diff --git a/packages/client/vite.config.ts b/packages/client/vite.config.ts
+index d868fd8b..c64d5e92 100644
+--- a/packages/client/vite.config.ts
++++ b/packages/client/vite.config.ts
+@@ -37,9 +37,9 @@ export default defineConfig({
+         enabled: true,
+       },
+       manifest: {
+-        name: "Stoat",
+-        short_name: "Stoat",
+-        description: "User-first open source chat platform.",
++        name: "Chat",
++        short_name: "Chat",
++        description: "Private chat instance.",
+         categories: ["communication", "chat", "messaging"],
+         start_url: base,
+         orientation: "any",
+-- 
+2.49.0.windows.1
+

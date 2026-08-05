@@ -1,0 +1,185 @@
+From 70c3e78f695a8ecf64a74e985be6f40ddd81c0e2 Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Sat, 1 Aug 2026 17:07:22 +0300
+Subject: [PATCH 1/3] feat: resolve instance URL at runtime
+
+Adds a persisted `serverUrl` config key and resolves the target instance
+lazily, so a single build can point at any self-hosted instance.
+
+Precedence: --force-server (persisted on use) > stored serverUrl >
+STOATIUM_SERVER_URL baked in at build time.
+
+Resolution must stay lazy: native/config.ts imports mainWindow from
+native/window.ts, so reading config at window.ts module scope hits the
+TDZ on `export const config`.
+---
+ forge.env.d.ts       |  3 +++
+ src/config.d.ts      |  1 +
+ src/main.ts          |  4 ++--
+ src/native/config.ts | 21 +++++++++++++++++++++
+ src/native/window.ts | 36 ++++++++++++++++++++++++++++++------
+ vite.main.config.ts  | 11 ++++++++++-
+ 6 files changed, 67 insertions(+), 9 deletions(-)
+
+diff --git a/forge.env.d.ts b/forge.env.d.ts
+index 9700e0a..03e4c6c 100644
+--- a/forge.env.d.ts
++++ b/forge.env.d.ts
+@@ -1 +1,4 @@
+ /// <reference types="@electron-forge/plugin-vite/forge-vite-env" />
++
++/** Default instance URL, injected by vite.main.config.ts at build time. */
++declare const STOATIUM_SERVER_URL: string;
+diff --git a/src/config.d.ts b/src/config.d.ts
+index d5f0cde..8d51584 100644
+--- a/src/config.d.ts
++++ b/src/config.d.ts
+@@ -5,6 +5,7 @@ declare type DesktopConfig = {
+   spellchecker: boolean;
+   hardwareAcceleration: boolean;
+   discordRpc: boolean;
++  serverUrl: string;
+   windowState: {
+     x: number;
+     y: number;
+diff --git a/src/main.ts b/src/main.ts
+index 3a604fd..19356b1 100644
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -7,7 +7,7 @@ import { autoLaunch } from "./native/autoLaunch";
+ import { config } from "./native/config";
+ import { initDiscordRpc } from "./native/discordRpc";
+ import { initTray } from "./native/tray";
+-import { BUILD_URL, createMainWindow, mainWindow } from "./native/window";
++import { createMainWindow, getBuildUrl, mainWindow } from "./native/window";
+ 
+ // Squirrel-specific logic
+ // create/remove shortcuts on Windows when installing / uninstalling
+@@ -88,7 +88,7 @@ if (acquiredLock) {
+   app.on("web-contents-created", (_, contents) => {
+     // prevent navigation out of build URL origin
+     contents.on("will-navigate", (event, navigationUrl) => {
+-      if (new URL(navigationUrl).origin !== BUILD_URL.origin) {
++      if (new URL(navigationUrl).origin !== getBuildUrl().origin) {
+         event.preventDefault();
+       }
+     });
+diff --git a/src/native/config.ts b/src/native/config.ts
+index f7c2d37..b3c7a91 100644
+--- a/src/native/config.ts
++++ b/src/native/config.ts
+@@ -28,6 +28,9 @@ const schema = {
+   discordRpc: {
+     type: "boolean",
+   } as JSONSchema.Boolean,
++  serverUrl: {
++    type: "string",
++  } as JSONSchema.String,
+   windowState: {
+     type: "object",
+     properties: {
+@@ -60,6 +63,7 @@ const store = new Store({
+     spellchecker: true,
+     hardwareAcceleration: true,
+     discordRpc: true,
++    serverUrl: "",
+     windowState: {
+       x: 0,
+       y: 0,
+@@ -192,6 +196,23 @@ class Config {
+     this.sync();
+   }
+ 
++  /**
++   * Instance this client connects to.
++   *
++   * Deliberately does not call `sync()`: this is resolved before the window
++   * exists, and `sync()` would dereference an undefined `mainWindow`.
++   */
++  get serverUrl() {
++    return (store as never as { get(k: string): string }).get("serverUrl");
++  }
++
++  set serverUrl(value: string) {
++    (store as never as { set(k: string, value: string): void }).set(
++      "serverUrl",
++      value,
++    );
++  }
++
+   get windowState() {
+     return (
+       store as never as { get(k: string): DesktopConfig["windowState"] }
+diff --git a/src/native/window.ts b/src/native/window.ts
+index d183972..056c658 100644
+--- a/src/native/window.ts
++++ b/src/native/window.ts
+@@ -20,11 +20,35 @@ import { updateTrayMenu } from "./tray";
+ export let mainWindow: BrowserWindow;
+ 
+ // currently in-use build
+-export const BUILD_URL = new URL(
+-  app.commandLine.hasSwitch("force-server")
+-    ? app.commandLine.getSwitchValue("force-server")
+-    : /*MAIN_WINDOW_VITE_DEV_SERVER_URL ??*/ "https://stoat.chat/app",
+-);
++//
++// Resolved lazily, NOT at module scope: `config` imports `mainWindow` from
++// this module, so touching `config` during this module's evaluation hits the
++// temporal dead zone on `export const config` and throws.
++let buildUrl: URL | undefined;
++
++/**
++ * Resolve the instance to connect to.
++ *
++ * Order of precedence:
++ *   1. `--force-server=<url>` — persisted, so it is only needed once
++ *   2. previously stored `serverUrl`
++ *   3. `STOATIUM_SERVER_URL` — baked in at build time from brand.env
++ */
++export function getBuildUrl(): URL {
++  if (buildUrl) return buildUrl;
++
++  let target: string;
++
++  if (app.commandLine.hasSwitch("force-server")) {
++    target = app.commandLine.getSwitchValue("force-server");
++    config.serverUrl = target;
++  } else {
++    target = config.serverUrl || STOATIUM_SERVER_URL;
++  }
++
++  buildUrl = new URL(target);
++  return buildUrl;
++}
+ 
+ // internal window state
+ let shouldQuit = false;
+@@ -89,7 +113,7 @@ export function createMainWindow() {
+   }
+ 
+   // load the entrypoint
+-  mainWindow.loadURL(BUILD_URL.toString());
++  mainWindow.loadURL(getBuildUrl().toString());
+ 
+   // minimise window to tray
+   mainWindow.on("close", (event) => {
+diff --git a/vite.main.config.ts b/vite.main.config.ts
+index fbf7eda..1d79395 100644
+--- a/vite.main.config.ts
++++ b/vite.main.config.ts
+@@ -1,4 +1,13 @@
+ import { defineConfig } from "vite";
+ 
+ // https://vitejs.dev/config
+-export default defineConfig({});
++export default defineConfig({
++  define: {
++    // Baked in at build time from brand.env. This is only the *default* —
++    // it is superseded by a persisted `serverUrl`, which is in turn
++    // superseded by the --force-server switch. See src/native/window.ts.
++    STOATIUM_SERVER_URL: JSON.stringify(
++      process.env.STOATIUM_SERVER_URL || "https://stoat.chat/app",
++    ),
++  },
++});

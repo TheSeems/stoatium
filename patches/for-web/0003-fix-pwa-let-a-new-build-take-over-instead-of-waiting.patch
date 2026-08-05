@@ -1,0 +1,54 @@
+From f5f75b332c2a4911f5168977937bce5859782e15 Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Sun, 2 Aug 2026 14:28:17 +0300
+Subject: fix(pwa): let a new build take over instead of waiting
+
+The service worker only skips waiting if it is sent a SKIP_WAITING message,
+and nothing sends one; there was no clientsClaim() either. A deployed build
+is therefore precached and then sits in "waiting" while the previous worker
+keeps serving its own precache, so reloading -- even with a cache bypass --
+still renders the old bundle.
+
+Self-hosted instances deploy far more often than stoat.chat, which makes
+this very visible: three consecutive deploys were invisible to the browser.
+
+skipWaiting alone would leave already-open tabs on the old worker, so
+activate claims them too.
+---
+ packages/client/src/serviceWorker.ts | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/packages/client/src/serviceWorker.ts b/packages/client/src/serviceWorker.ts
+index 0eb5c15b..a9b9cedb 100644
+--- a/packages/client/src/serviceWorker.ts
++++ b/packages/client/src/serviceWorker.ts
+@@ -21,6 +21,26 @@ self.addEventListener("message", (event) => {
+   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+ });
+ 
++// Take over as soon as a new build is precached, instead of waiting for every
++// tab on the origin to close.
++//
++// The message handler above only skips waiting if something asks it to, and
++// nothing does; there was no clientsClaim() either. The effect is that a
++// deployed build is fetched and precached, then sits in "waiting" while the
++// previous service worker keeps serving its own precache -- so reloading, even
++// with a cache bypass, still renders the old bundle. Self-hosted instances
++// deploy far more often than stoat.chat does, which makes this very visible.
++//
++// skipWaiting alone would leave already-open tabs on the old worker; claim()
++// moves them over too.
++self.addEventListener("install", () => {
++  self.skipWaiting();
++});
++
++self.addEventListener("activate", (event) => {
++  event.waitUntil(self.clients.claim());
++});
++
+ self.addEventListener("notificationclick", (event) => {
+   event.notification.close();
+   if (typeof event.notification.data === "string") {
+-- 
+2.49.0.windows.1
+

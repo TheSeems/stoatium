@@ -1,0 +1,403 @@
+From 30aaad590dc8416a812afbe35a7d5a30fc01da51 Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Sat, 1 Aug 2026 17:09:37 +0300
+Subject: [PATCH 2/3] feat: debrand and drive branding from environment
+
+AGPL grants no trademark rights, so a redistributable fork must not ship
+upstream's marks. Branding now comes from brand.env with neutral defaults:
+product name, exec name, app id, author, copyright, appx publisher.
+
+Also:
+- drop the hardcoded stoat.chat Squirrel iconUrl in favour of the local asset
+- publish only when STOATIUM_PUBLISH_REPO is set, never to upstream's repo
+- gate Discord Rich Presence behind a fork-supplied application ID, since
+  upstream's would present this build to Discord as "Stoat"
+- rename flatpak appstream files to the new app id
+---
+ chat.stoat.StoatDesktop.desktop      | 11 -----
+ chat.stoat.StoatDesktop.metainfo.xml | 70 ----------------------------
+ chat.stoatium.Stoatium.desktop       | 11 +++++
+ chat.stoatium.Stoatium.metainfo.xml  | 32 +++++++++++++
+ forge.config.ts                      | 48 +++++++++++--------
+ forge.env.d.ts                       | 10 +++-
+ package.json                         |  6 +--
+ src/main.ts                          |  2 +-
+ src/native/discordRpc.ts             | 16 +++----
+ vite.main.config.ts                  | 22 +++++++--
+ 10 files changed, 109 insertions(+), 119 deletions(-)
+ delete mode 100644 chat.stoat.StoatDesktop.desktop
+ delete mode 100644 chat.stoat.StoatDesktop.metainfo.xml
+ create mode 100644 chat.stoatium.Stoatium.desktop
+ create mode 100644 chat.stoatium.Stoatium.metainfo.xml
+
+diff --git a/chat.stoat.StoatDesktop.desktop b/chat.stoat.StoatDesktop.desktop
+deleted file mode 100644
+index b0e0b55..0000000
+--- a/chat.stoat.StoatDesktop.desktop
++++ /dev/null
+@@ -1,11 +0,0 @@
+-[Desktop Entry]
+-Name=Stoat
+-Comment=Open source, user-first chat platform
+-Exec=stoat-desktop
+-Terminal=false
+-Type=Application
+-Icon=chat.stoat.StoatDesktop
+-Categories=Network;InstantMessaging
+-StartupWMClass=stoat-desktop
+-X-Desktop-File-Install-Version=0.26
+-X-Flatpak=chat.stoat.StoatDesktop
+diff --git a/chat.stoat.StoatDesktop.metainfo.xml b/chat.stoat.StoatDesktop.metainfo.xml
+deleted file mode 100644
+index 73330f0..0000000
+--- a/chat.stoat.StoatDesktop.metainfo.xml
++++ /dev/null
+@@ -1,70 +0,0 @@
+-<?xml version="1.0" encoding="UTF-8"?>
+-<component type="desktop">
+-  <id>chat.stoat.StoatDesktop</id>
+-  <launchable type="desktop-id">chat.stoat.StoatDesktop.desktop</launchable>
+-  <name>Stoat</name>
+-  <developer id="chat.stoat">
+-    <name>Revolt Platforms Ltd</name>
+-  </developer>
+-  <summary>Open source, user-first chat platform</summary>
+-  <metadata_license>CC0-1.0</metadata_license>
+-  <project_license>AGPL-3.0</project_license>
+-  <icon type="remote" height="256" width="256">
+-    https://raw.githubusercontent.com/stoatchat/assets/f106946659af67ad4f008588ac51570029b2fd47/desktop/icon.png</icon>
+-  <description>
+-    <p>Stoat is an open source, user-first chat platform. Send messages, share
+-      images, mention users, and join voice channels — all from a native desktop
+-      application.</p>
+-  </description>
+-  <screenshots>
+-    <screenshot type="default">
+-      <caption>Main window</caption>
+-      <image>https://raw.githubusercontent.com/stoatchat/for-desktop/b57faa2c59865fea15a879c9a9304271067d0020/screenshot.png</image>
+-    </screenshot>
+-  </screenshots>
+-  <releases>
+-    <release date="2026-02-14" version="1.2.0">
+-      <description>
+-        <p>Features:</p>
+-        <ul>
+-          <li>New Branding</li>
+-          <li>Persist and restore window size and position</li>
+-        </ul>
+-        <p>Bug Fixes:</p>
+-        <ul>
+-          <li>App Autostart</li>
+-        </ul>
+-      </description>
+-    </release>
+-    <release date="2025-12-29" version="1.1.12">
+-      <description>
+-        <p>Bug fixes:</p>
+-        <ul>
+-          <li>Add NixOS compatibility for electron startup</li>
+-          <li>Correctly load badge count; expose to renderer</li>
+-          <li>Fix event listener accumulation from rpc client</li>
+-          <li>Fix macOS tray icon size</li>
+-          <li>Fix RPC largeImageText</li>
+-          <li>Use the correct argument for auto start</li>
+-        </ul>
+-      </description>
+-    </release>
+-  </releases>
+-  <url type="bugtracker">https://github.com/stoatchat/for-desktop/issues</url>
+-  <url type="homepage">https://stoat.chat</url>
+-  <url type="vcs-browser">https://github.com/stoatchat/for-desktop</url>
+-  <content_rating type="oars-1.1">
+-    <content_attribute id="social-chat">intense</content_attribute>
+-    <content_attribute id="social-info">intense</content_attribute>
+-    <content_attribute id="social-audio">intense</content_attribute>
+-    <content_attribute id="social-contacts">intense</content_attribute>
+-  </content_rating>
+-  <requires>
+-    <display_length compare="ge">940</display_length>
+-    <internet>always</internet>
+-  </requires>
+-  <supports>
+-    <control>keyboard</control>
+-    <control>pointing</control>
+-  </supports>
+-</component>
+diff --git a/chat.stoatium.Stoatium.desktop b/chat.stoatium.Stoatium.desktop
+new file mode 100644
+index 0000000..8259d1c
+--- /dev/null
++++ b/chat.stoatium.Stoatium.desktop
+@@ -0,0 +1,11 @@
++[Desktop Entry]
++Name=Stoatium
++Comment=Debranded, self-host-configurable chat client
++Exec=stoatium
++Terminal=false
++Type=Application
++Icon=chat.stoatium.Stoatium
++Categories=Network;InstantMessaging
++StartupWMClass=stoatium
++X-Desktop-File-Install-Version=0.26
++X-Flatpak=chat.stoatium.Stoatium
+diff --git a/chat.stoatium.Stoatium.metainfo.xml b/chat.stoatium.Stoatium.metainfo.xml
+new file mode 100644
+index 0000000..ff6f262
+--- /dev/null
++++ b/chat.stoatium.Stoatium.metainfo.xml
+@@ -0,0 +1,32 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<component type="desktop">
++  <id>chat.stoatium.Stoatium</id>
++  <launchable type="desktop-id">chat.stoatium.Stoatium.desktop</launchable>
++  <name>Stoatium</name>
++  <developer id="chat.stoatium">
++    <name>Stoatium Contributors</name>
++  </developer>
++  <summary>Debranded, self-host-configurable chat client</summary>
++  <metadata_license>CC0-1.0</metadata_license>
++  <project_license>AGPL-3.0-or-later</project_license>
++  <icon type="local" height="256" width="256">/app/share/icons/hicolor/256x256/apps/chat.stoatium.Stoatium.png</icon>
++  <description>
++    <p>Stoatium is an unofficial, debranded build of the Stoat desktop client
++      that can be pointed at any self-hosted instance. It is not affiliated
++      with or endorsed by the Stoat project.</p>
++  </description>
++  <content_rating type="oars-1.1">
++    <content_attribute id="social-chat">intense</content_attribute>
++    <content_attribute id="social-info">intense</content_attribute>
++    <content_attribute id="social-audio">intense</content_attribute>
++    <content_attribute id="social-contacts">intense</content_attribute>
++  </content_rating>
++  <requires>
++    <display_length compare="ge">940</display_length>
++    <internet>always</internet>
++  </requires>
++  <supports>
++    <control>keyboard</control>
++    <control>pointing</control>
++  </supports>
++</component>
+diff --git a/forge.config.ts b/forge.config.ts
+index 4a0ced6..3e01bf6 100644
+--- a/forge.config.ts
++++ b/forge.config.ts
+@@ -12,13 +12,20 @@ import { FuseV1Options, FuseVersion } from "@electron/fuses";
+ 
+ // import { globSync } from "node:fs";
+ 
++// All branding is driven by brand.env so this patch stays generic and does
++// not need editing per-fork. Defaults are the Stoatium reference values.
+ const STRINGS = {
+-  author: "Revolt Platforms LTD",
+-  name: "Stoat",
+-  execName: "stoat-desktop",
+-  description: "Open source user-first chat platform.",
++  author: process.env.STOATIUM_AUTHOR || "Stoatium Contributors",
++  name: process.env.STOATIUM_PRODUCT_NAME || "Stoatium",
++  execName: process.env.STOATIUM_EXEC_NAME || "stoatium",
++  description:
++    process.env.STOATIUM_DESCRIPTION ||
++    "Debranded, self-host-configurable chat client.",
+ };
+ 
++const APP_ID = process.env.STOATIUM_APP_ID || "chat.stoatium.Stoatium";
++const COPYRIGHT = process.env.STOATIUM_COPYRIGHT || "AGPL-3.0-or-later";
++
+ const ASSET_DIR = "assets/desktop";
+ 
+ /**
+@@ -28,14 +35,12 @@ const makers: ForgeConfig["makers"] = [
+   new MakerSquirrel({
+     name: STRINGS.name,
+     authors: STRINGS.author,
+-    // todo: hoist this
+-    iconUrl: `https://stoat.chat/app/assets/icon-DUSNE-Pb.ico`,
+-    // todo: loadingGif
++    // local asset — upstream pointed this at stoat.chat
+     setupIcon: `${ASSET_DIR}/icon.ico`,
+     description: STRINGS.description,
+     exe: `${STRINGS.execName}.exe`,
+     setupExe: `${STRINGS.execName}-setup.exe`,
+-    copyright: "Copyright (C) 2025 Revolt Platforms LTD",
++    copyright: COPYRIGHT,
+   }),
+   new MakerZIP({}),
+ ];
+@@ -48,13 +53,13 @@ if (!process.env.PLATFORM) {
+     new MakerAppX({
+       certPass: "",
+       packageExecutable: `app\\${STRINGS.execName}.exe`,
+-      publisher: "CN=B040CC7E-0016-4AF5-957F-F8977A6CFA3B",
++      publisher: process.env.STOATIUM_APPX_PUBLISHER || "CN=Stoatium",
+     }),
+     // flatpak publishing should occur through flathub repos.
+     // this is just for testing purposes
+     new MakerFlatpak({
+       options: {
+-        id: "chat.stoat.stoat-desktop",
++        id: APP_ID,
+         description: STRINGS.description,
+         productName: STRINGS.name,
+         productDescription: STRINGS.description,
+@@ -104,7 +109,7 @@ if (!process.env.PLATFORM) {
+           "--talk-name=com.canonical.Unity",
+           "--env=XCURSOR_PATH=/run/host/user-share/icons:/run/host/share/icons",
+           "--env=ELECTRON_TRASH=gio",
+-          "--env=TMPDIR=xdg-run/app/chat.stoat.stoat-desktop",
++          `--env=TMPDIR=xdg-run/app/${APP_ID}`,
+         ],
+         files: [],
+       } as MakerFlatpakOptionsConfig,
+@@ -165,14 +170,19 @@ const config: ForgeConfig = {
+       [FuseV1Options.OnlyLoadAppFromAsar]: true,
+     }),
+   ],
+-  publishers: [
+-    new PublisherGithub({
+-      repository: {
+-        owner: "stoatchat",
+-        name: "for-desktop",
+-      },
+-    }),
+-  ],
++  // Never default to upstream's release repo. Set STOATIUM_PUBLISH_REPO to
++  // "owner/name" to enable publishing; otherwise `make` produces local
++  // artifacts only.
++  publishers: process.env.STOATIUM_PUBLISH_REPO
++    ? [
++        new PublisherGithub({
++          repository: {
++            owner: process.env.STOATIUM_PUBLISH_REPO.split("/")[0],
++            name: process.env.STOATIUM_PUBLISH_REPO.split("/")[1],
++          },
++        }),
++      ]
++    : [],
+ };
+ 
+ export default config;
+diff --git a/forge.env.d.ts b/forge.env.d.ts
+index 03e4c6c..0ad35df 100644
+--- a/forge.env.d.ts
++++ b/forge.env.d.ts
+@@ -1,4 +1,12 @@
+ /// <reference types="@electron-forge/plugin-vite/forge-vite-env" />
+ 
+-/** Default instance URL, injected by vite.main.config.ts at build time. */
++// Injected by vite.main.config.ts at build time, sourced from brand.env.
++
++/** Default instance URL. */
+ declare const STOATIUM_SERVER_URL: string;
++/** Product name, as shown to the user. */
++declare const STOATIUM_PRODUCT_NAME: string;
++/** Reverse-DNS application identifier. */
++declare const STOATIUM_APP_ID: string;
++/** Discord application ID for Rich Presence; empty disables the feature. */
++declare const STOATIUM_DISCORD_APP_ID: string;
+diff --git a/package.json b/package.json
+index 78fc554..8b93ab8 100644
+--- a/package.json
++++ b/package.json
+@@ -1,9 +1,9 @@
+ {
+-  "name": "stoat-desktop",
+-  "productName": "stoat-desktop",
++  "name": "stoatium",
++  "productName": "Stoatium",
+   "version": "1.4.2",
+   "main": ".vite/build/main.js",
+-  "repository": "stoatchat/desktop",
++  "repository": "stoatium/stoatium",
+   "scripts": {
+     "start": "electron-forge start -- --no-sandbox",
+     "package": "electron-forge package",
+diff --git a/src/main.ts b/src/main.ts
+index 19356b1..47b56f1 100644
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -55,7 +55,7 @@ if (acquiredLock) {
+ 
+     // Windows specific fix for notifications
+     if (process.platform === "win32") {
+-      app.setAppUserModelId("chat.stoat.notifications");
++      app.setAppUserModelId(`${STOATIUM_APP_ID}.notifications`);
+     }
+   });
+ 
+diff --git a/src/native/discordRpc.ts b/src/native/discordRpc.ts
+index 9df475b..4224542 100644
+--- a/src/native/discordRpc.ts
++++ b/src/native/discordRpc.ts
+@@ -8,6 +8,10 @@ let rpc: Client;
+ export async function initDiscordRpc() {
+   if (!config.discordRpc) return;
+ 
++  // Upstream ships its own Discord application ID, which would present this
++  // fork to Discord as "Stoat". A fork must register its own or go without.
++  if (!STOATIUM_DISCORD_APP_ID) return;
++
+   // clean up existing client if one exists
+   rpc?.removeAllListeners();
+ 
+@@ -16,22 +20,16 @@ export async function initDiscordRpc() {
+ 
+     rpc.on("ready", () =>
+       rpc.setActivity({
+-        state: "stoat.chat",
++        state: STOATIUM_PRODUCT_NAME,
+         details: "Chatting with others",
+         largeImageKey: "qr",
+-        largeImageText: "Join Stoat!",
+-        buttons: [
+-          {
+-            label: "Join Stoat",
+-            url: "https://stoat.chat/",
+-          },
+-        ],
++        largeImageText: STOATIUM_PRODUCT_NAME,
+       }),
+     );
+ 
+     rpc.on("disconnected", reconnect);
+ 
+-    rpc.login({ clientId: "872068124005007420" });
++    rpc.login({ clientId: STOATIUM_DISCORD_APP_ID });
+   } catch (err) {
+     reconnect();
+   }
+diff --git a/vite.main.config.ts b/vite.main.config.ts
+index 1d79395..9950a04 100644
+--- a/vite.main.config.ts
++++ b/vite.main.config.ts
+@@ -1,13 +1,25 @@
+ import { defineConfig } from "vite";
+ 
++const define = (value: string | undefined, fallback: string) =>
++  JSON.stringify(value || fallback);
++
+ // https://vitejs.dev/config
+ export default defineConfig({
+   define: {
+-    // Baked in at build time from brand.env. This is only the *default* —
+-    // it is superseded by a persisted `serverUrl`, which is in turn
+-    // superseded by the --force-server switch. See src/native/window.ts.
+-    STOATIUM_SERVER_URL: JSON.stringify(
+-      process.env.STOATIUM_SERVER_URL || "https://stoat.chat/app",
++    // Baked in at build time from brand.env. This is only the *default*
++    // instance — it is superseded by a persisted `serverUrl`, which is in
++    // turn superseded by --force-server. See src/native/window.ts.
++    STOATIUM_SERVER_URL: define(
++      process.env.STOATIUM_SERVER_URL,
++      "https://stoat.chat/app",
++    ),
++    STOATIUM_PRODUCT_NAME: define(
++      process.env.STOATIUM_PRODUCT_NAME,
++      "Stoatium",
+     ),
++    STOATIUM_APP_ID: define(process.env.STOATIUM_APP_ID, "chat.stoatium.Stoatium"),
++    // Empty by default: Discord Rich Presence stays off unless the fork
++    // registers its own Discord application.
++    STOATIUM_DISCORD_APP_ID: define(process.env.STOATIUM_DISCORD_APP_ID, ""),
+   },
+ });

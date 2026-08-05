@@ -1,0 +1,145 @@
+From 3af3069de2c49455726446bbff03a3f2ce2db04f Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Sun, 2 Aug 2026 14:36:57 +0300
+Subject: i18n(ru): plural forms, remaining literals, and long-word clipping
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+"1 участников в сети" was wrong: Russian has four plural categories and a
+single form is only correct for the "many" case. The translation is now an
+ICU plural, which lingui accepts even though the source message is not
+itself plural.
+
+Three more bare literals: the message search placeholder, and the synthesised
+Online/Offline member-group names -- those are built as role objects rather
+than rendered as text, which is why they were easy to miss.
+
+The joined-date tile is a 1/1 tile with overflow hidden, sized around the
+English "Joined". Russian's "Присоединился" is one 13-character word and was
+clipped mid-word, so that heading now wraps at a slightly smaller size
+instead of using the shared large Text style.
+---
+ .../components/i18n/catalogs/ru/messages.po   |  5 +++-
+ .../features/profiles/ProfileJoined.tsx       | 29 +++++++++++++++++--
+ .../src/interface/channels/ChannelHeader.tsx  |  2 +-
+ .../interface/channels/text/MemberSidebar.tsx |  5 ++--
+ 4 files changed, 35 insertions(+), 6 deletions(-)
+
+diff --git a/packages/client/components/i18n/catalogs/ru/messages.po b/packages/client/components/i18n/catalogs/ru/messages.po
+index ac08871d..4cfae80b 100644
+--- a/packages/client/components/i18n/catalogs/ru/messages.po
++++ b/packages/client/components/i18n/catalogs/ru/messages.po
+@@ -3622,10 +3622,13 @@ msgid "Direct Messages"
+ msgstr "Личные сообщения"
+ 
+ msgid "{0} members online"
+-msgstr "{0} участников в сети"
++msgstr "{0, plural, one {# участник в сети} few {# участника в сети} many {# участников в сети} other {# участника в сети}}"
+ 
+ msgid "Incoming"
+ msgstr "Входящие"
+ 
+ msgid "Outgoing"
+ msgstr "Исходящие"
++
++msgid "Search messages..."
++msgstr "Поиск сообщений…"
+diff --git a/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx b/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx
+index 14e456b3..f8361a48 100644
+--- a/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx
++++ b/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx
+@@ -3,6 +3,8 @@ import { Show } from "solid-js";
+ import { Trans } from "@lingui-solid/solid/macro";
+ import { ServerMember, User } from "stoat.js";
+ 
++import { styled } from "styled-system/jsx";
++
+ import { timeLocale, useTime } from "@revolt/i18n";
+ 
+ import { Text } from "../../design";
+@@ -15,9 +17,16 @@ export function ProfileJoined(props: { user: User; member?: ServerMember }) {
+ 
+   return (
+     <ProfileCard>
+-      <Text class="title" size="large">
++      {/*
++        Not <Text size="large">: this card is a 1/1 tile with overflow hidden,
++        sized around the English "Joined". Russian's "Присоединился" is a
++        single 13-character word, so at that size it overflowed the tile and
++        was clipped mid-word. Wrapping and a slightly smaller size keep it
++        inside without touching the shared Text component.
++      */}
++      <CardTitle>
+         <Trans>Joined</Trans>
+-      </Text>
++      </CardTitle>
+       <Text class="label">
+         <OverflowingText>Stoat</OverflowingText>
+         {/* <Trans>Account Created</Trans> */}
+@@ -49,3 +58,19 @@ export function ProfileJoined(props: { user: User; member?: ServerMember }) {
+     </ProfileCard>
+   );
+ }
++
++/**
++ * Heading for the joined-date tile.
++ *
++ * Sized to survive a long single-word translation inside a fixed-aspect tile.
++ */
++const CardTitle = styled("div", {
++  base: {
++    fontWeight: 600,
++    fontSize: "0.95rem",
++    lineHeight: 1.2,
++    whiteSpace: "normal",
++    overflowWrap: "anywhere",
++    color: "var(--md-sys-color-on-surface)",
++  },
++});
+diff --git a/packages/client/src/interface/channels/ChannelHeader.tsx b/packages/client/src/interface/channels/ChannelHeader.tsx
+index 6525f974..e7c11463 100644
+--- a/packages/client/src/interface/channels/ChannelHeader.tsx
++++ b/packages/client/src/interface/channels/ChannelHeader.tsx
+@@ -277,7 +277,7 @@ export function ChannelHeader(props: Props) {
+           }
+         >
+           <SearchBox
+-            placeholder="Search messages..."
++            placeholder={t`Search messages...`}
+             value={searchValue()!}
+             onChange={(e) =>
+               e.currentTarget.value
+diff --git a/packages/client/src/interface/channels/text/MemberSidebar.tsx b/packages/client/src/interface/channels/text/MemberSidebar.tsx
+index a6589889..88bf1993 100644
+--- a/packages/client/src/interface/channels/text/MemberSidebar.tsx
++++ b/packages/client/src/interface/channels/text/MemberSidebar.tsx
+@@ -75,6 +75,7 @@ const LARGE_SERVERS = [
+  */
+ export function ServerMemberSidebar(props: Props) {
+   const client = useClient();
++  const { t } = useLingui();
+ 
+   // todo: useQuery
+   createEffect(
+@@ -151,7 +152,7 @@ export function ServerMemberSidebar(props: Props) {
+       {
+         role: {
+           id: "default",
+-          name: "Online",
++          name: t`Online`,
+           icon: undefined,
+         },
+         members: byRole["default"],
+@@ -159,7 +160,7 @@ export function ServerMemberSidebar(props: Props) {
+       {
+         role: {
+           id: "offline",
+-          name: "Offline",
++          name: t`Offline`,
+           icon: undefined,
+         },
+         members: byRole["offline"],
+-- 
+2.49.0.windows.1
+

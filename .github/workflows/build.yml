@@ -1,0 +1,56 @@
+name: build
+
+# Manual only. The desktop build is a full Electron package on two runners,
+# which is a lot of minutes to spend on every push when the thing that
+# actually ships -- the web client -- is built in-cluster by kaniko.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: ubuntu-latest
+            name: linux
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      # forge.config.ts skips the appx/flatpak/deb makers when PLATFORM is
+      # set. Those need signing certs or a Flatpak toolchain and are not
+      # worth failing CI over; Squirrel (Windows) and ZIP (both) are enough.
+      PLATFORM: ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No pnpm cache: the lockfile lives inside build/, which does not exist
+      # until the step below creates it.
+
+      # Clone upstream at the pinned tag and apply the patch series. A patch
+      # that no longer applies fails the build here, which is the point.
+      - name: Apply patches
+        shell: pwsh
+        run: ./scripts/prepare.ps1 -Force
+
+      - name: Build
+        shell: pwsh
+        run: ./scripts/build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stoatium-${{ matrix.name }}
+          path: build/for-desktop/out/make/**/*
+          if-no-files-found: error

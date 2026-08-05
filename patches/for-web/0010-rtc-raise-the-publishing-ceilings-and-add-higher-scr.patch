@@ -1,0 +1,147 @@
+From a5c34694a4eafce58c0c536aedccbeff2ed9997b Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Wed, 5 Aug 2026 23:36:49 +0300
+Subject: [PATCH] rtc: raise the publishing ceilings and add higher screen
+ share tiers
+
+Every track was publishing at livekit-client's defaults, which are chosen to
+conserve a public SFU's bandwidth: ~1.7Mbps video and the `speech` audio
+preset, 24kbps mono with DTX. Room publishDefaults now set explicit ceilings
+-- 4Mbps camera, 10Mbps screen share at up to 60fps, music-grade stereo
+audio, DTX off and RED on.
+
+None of this forces a bitrate. Congestion control still scales down to
+whatever the link sustains; these only raise the caps it may scale up to.
+RED in particular matters on this deployment, where the media path runs
+through an AmneziaWG tunnel.
+
+Adds 1080p60 and 1440p60 screen share tiers. livekit-client ships no preset
+above 1080p, so the 1440p resolution is built by hand, and it is gated on
+the instance advertising at least that many pixels -- the settings UI and
+the picker both build their lists from getEnabledScreenShareQualities, so
+the new tiers appear on their own.
+---
+ packages/client/components/rtc/state.tsx      | 58 +++++++++++++++++++
+ .../client/components/state/stores/Voice.ts   | 15 ++++-
+ 2 files changed, 71 insertions(+), 2 deletions(-)
+
+diff --git a/packages/client/components/rtc/state.tsx b/packages/client/components/rtc/state.tsx
+index 5ccd42ff..49ad25e9 100644
+--- a/packages/client/components/rtc/state.tsx
++++ b/packages/client/components/rtc/state.tsx
+@@ -14,6 +14,7 @@ import {
+ } from "solid-livekit-components";
+ 
+ import {
++  AudioPresets,
+   Room,
+   ScreenSharePresets,
+   Track,
+@@ -143,6 +144,31 @@ class Voice {
+     this.disconnect();
+ 
+     const room = new Room({
++      // Publishing ceilings. Nothing here forces a bitrate -- LiveKit's
++      // congestion control still scales down to whatever the link sustains --
++      // these only lift the caps it is allowed to scale up to. Without them
++      // every track published at the library defaults, which are tuned for
++      // conserving a public SFU's bandwidth.
++      //
++      // These are ceilings, not targets: on a deployment that relays media
++      // through a VPN or a constrained uplink, the effective bitrate will
++      // settle well below them.
++      publishDefaults: {
++        // Camera. Default for 720p is ~1.7Mbps.
++        videoEncoding: { maxBitrate: 4_000_000, maxFramerate: 30 },
++        // Screen share, where the difference is most visible: text stays
++        // legible instead of smearing on every scroll.
++        screenShareEncoding: { maxBitrate: 10_000_000, maxFramerate: 60 },
++        // Default is `speech` (~24kbps mono, DTX on). Music-grade stereo
++        // costs ~128kbps per speaker, which is nothing next to the video.
++        audioPreset: AudioPresets.musicHighQualityStereo,
++        // DTX stops sending during silence -- cheap, but it clips quiet
++        // speech and mangles background music.
++        dtx: false,
++        // Redundant audio encoding: costs a little bandwidth, survives loss
++        // far better. Worth it over a tunnelled UDP path.
++        red: true,
++      },
+       audioCaptureDefaults: {
+         deviceId: this.#settings.preferredAudioInputDevice,
+         echoCancellation: this.#settings.echoCancellation,
+@@ -367,6 +393,38 @@ class Voice {
+             fullName: `1080p 30FPS`,
+             contentHint: "motion",
+           };
++
++          // 1080p60 for anything that moves -- games, video -- where the
++          // frame rate matters more than the extra pixels.
++          qualities.smooth = {
++            name: "smooth",
++            resolution: {
++              ...ScreenSharePresets.h1080fps30.resolution,
++              frameRate: 60,
++            },
++            fullName: `1080p 60FPS`,
++            contentHint: "motion",
++          };
++
++          // 1440p60, gated separately: only offered when the instance allows
++          // at least that many pixels. livekit-client ships no preset above
++          // 1080p, so the resolution is built by hand.
++          if (
++            (limit[0] === 0 || limit[0] >= 2560) &&
++            (limit[1] === 0 || limit[1] >= 1440)
++          ) {
++            qualities.ultra = {
++              name: "ultra",
++              resolution: {
++                width: 2560,
++                height: 1440,
++                frameRate: 60,
++                aspectRatio: 2560 / 1440,
++              },
++              fullName: `1440p 60FPS`,
++              contentHint: "motion",
++            };
++          }
+           const originalResolution = ScreenSharePresets.original.resolution;
+           originalResolution.frameRate = 5;
+           originalResolution.aspectRatio = 0;
+diff --git a/packages/client/components/state/stores/Voice.ts b/packages/client/components/state/stores/Voice.ts
+index 4532b58e..62ff03e7 100644
+--- a/packages/client/components/state/stores/Voice.ts
++++ b/packages/client/components/state/stores/Voice.ts
+@@ -14,9 +14,18 @@ const NoiseSuppresionStates: NoiseSuppresionState[] = [
+ ];
+ 
+ /**
+- * Possible screen share qualities. Low is 720p@30fps, high 1080p@30fps and text is source@5fps.
++ * Possible screen share qualities. Low is 720p@30fps, high 1080p@30fps,
++ * smooth 1080p@60fps, ultra 1440p@60fps and text is source@5fps.
++ *
++ * Which of these are actually offered depends on the instance's
++ * features.limits video_resolution -- see getEnabledScreenShareQualities.
+  */
+-export type ScreenShareQualityName = "low" | "high" | "text";
++export type ScreenShareQualityName =
++  | "low"
++  | "high"
++  | "smooth"
++  | "ultra"
++  | "text";
+ 
+ /**
+  * Array of available screen share quality names.
+@@ -24,6 +33,8 @@ export type ScreenShareQualityName = "low" | "high" | "text";
+ export const ScreenShareQualityNames: ScreenShareQualityName[] = [
+   "low",
+   "high",
++  "smooth",
++  "ultra",
+   "text",
+ ];
+ 
+-- 
+2.49.0.windows.1
+

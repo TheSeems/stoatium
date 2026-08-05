@@ -1,0 +1,240 @@
+From 3179b41748c7f039694091a4ee8eb600865372ea Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Wed, 5 Aug 2026 19:10:37 +0300
+Subject: [PATCH] ui(profile): size cards to content, fix the hover card,
+ translate literals
+
+width=3 was gridColumn "1 / 4". The profile cards are used in two grids --
+the modal's three columns and the hover card's two -- so in the hover card
+a hardcoded line 4 conjured a phantom third column, squeezing the banner
+into a strip. "1 / -1" spans whatever the grid actually has. Same for the
+actions row.
+
+width=1 forced aspectRatio 1/1 with overflow hidden. A square is only right
+when the content fills it: a "Groups" card holding one shared group drew a
+single 20px avatar adrift in a large empty box, and anything taller than the
+square was silently cut. Cards now size to their content.
+
+Mutual friends and groups span the row with 32px avatars -- they are strips
+of faces, not tiles.
+
+"Mutuals", "Groups", "Bio", "Add Friend", "Accept friend request", "Cancel
+friend request" and "Message" were bare literals that never reached the
+catalog, so they stayed English in every locale. Four already had
+translations under the same msgid; Bio and the two mutuals lists are new.
+---
+ .../components/i18n/catalogs/ru/messages.po   | 12 +++++++++++
+ .../features/profiles/ProfileActions.tsx      | 20 +++++++++++++-----
+ .../features/profiles/ProfileBio.tsx          |  4 +++-
+ .../features/profiles/ProfileCard.tsx         | 14 ++++++++++---
+ .../features/profiles/ProfileMutuals.tsx      | 21 +++++++++++++------
+ 5 files changed, 56 insertions(+), 15 deletions(-)
+
+diff --git a/packages/client/components/i18n/catalogs/ru/messages.po b/packages/client/components/i18n/catalogs/ru/messages.po
+index bd665a42..096d6307 100644
+--- a/packages/client/components/i18n/catalogs/ru/messages.po
++++ b/packages/client/components/i18n/catalogs/ru/messages.po
+@@ -548,6 +548,10 @@ msgstr "Баны"
+ msgid "Block user"
+ msgstr "Заблокировать пользователя"
+ 
++#: components/ui/components/features/profiles/ProfileBio.tsx
++msgid "Bio"
++msgstr "О себе"
++
+ #: src/interface/Friends.tsx
+ msgid "Blocked"
+ msgstr "Блокировки"
+@@ -2053,6 +2057,14 @@ msgstr "Передвигать участников между голосовы
+ msgid "Multi-factor authentication is already enabled for this account."
+ msgstr "Многофакторная аутентификация уже включена для этого аккаунта."
+ 
++#: components/ui/components/features/profiles/ProfileMutuals.tsx
++msgid "Mutual friends"
++msgstr "Общие друзья"
++
++#: components/ui/components/features/profiles/ProfileMutuals.tsx
++msgid "Mutual groups"
++msgstr "Общие группы"
++
+ #: components/ui/components/features/voice/callCard/VoiceCallCardActions.tsx
+ #: components/app/menus/UserContextMenu.tsx
+ #: components/app/interface/settings/user/notifications/Sounds.tsx
+diff --git a/packages/client/components/ui/components/features/profiles/ProfileActions.tsx b/packages/client/components/ui/components/features/profiles/ProfileActions.tsx
+index 3e26b558..2107ecdd 100644
+--- a/packages/client/components/ui/components/features/profiles/ProfileActions.tsx
++++ b/packages/client/components/ui/components/features/profiles/ProfileActions.tsx
+@@ -1,5 +1,6 @@
+ import { Show } from "solid-js";
+ 
++import { Trans } from "@lingui-solid/solid/macro";
+ import { useNavigate } from "@solidjs/router";
+ import { ServerMember, User } from "stoat.js";
+ import { styled } from "styled-system/jsx";
+@@ -49,12 +50,18 @@ export function ProfileActions(props: {
+ 
+   return (
+     <Actions width={props.width}>
++      {/*
++        These four were bare literals, so they never reached the catalog and
++        stayed English in every locale.
++      */}
+       <Show when={props.user.relationship === "None" && !props.user.bot}>
+-        <Button onPress={() => props.user.addFriend()}>Add Friend</Button>
++        <Button onPress={() => props.user.addFriend()}>
++          <Trans>Add friend</Trans>
++        </Button>
+       </Show>
+       <Show when={props.user.relationship === "Incoming"}>
+         <Button onPress={() => props.user.addFriend()}>
+-          Accept friend request
++          <Trans>Accept friend request</Trans>
+         </Button>
+         <IconButton onPress={() => props.user.removeFriend()}>
+           <MdCancel />
+@@ -62,11 +69,13 @@ export function ProfileActions(props: {
+       </Show>
+       <Show when={props.user.relationship === "Outgoing"}>
+         <Button onPress={() => props.user.removeFriend()}>
+-          Cancel friend request
++          <Trans>Cancel friend request</Trans>
+         </Button>
+       </Show>
+       <Show when={props.user.relationship === "Friend"}>
+-        <Button onPress={openDm}>Message</Button>
++        <Button onPress={openDm}>
++          <Trans>Message</Trans>
++        </Button>
+       </Show>
+ 
+       <Show
+@@ -113,7 +122,8 @@ const Actions = styled("div", {
+   variants: {
+     width: {
+       3: {
+-        gridColumn: "1 / 4",
++        // See ProfileCard: the hover card's grid only has two columns.
++        gridColumn: "1 / -1",
+       },
+       2: {
+         gridColumn: "1 / 3",
+diff --git a/packages/client/components/ui/components/features/profiles/ProfileBio.tsx b/packages/client/components/ui/components/features/profiles/ProfileBio.tsx
+index b983034e..14fcefcc 100644
+--- a/packages/client/components/ui/components/features/profiles/ProfileBio.tsx
++++ b/packages/client/components/ui/components/features/profiles/ProfileBio.tsx
+@@ -1,5 +1,6 @@
+ import { Show } from "solid-js";
+ 
++import { Trans } from "@lingui-solid/solid/macro";
+ import { styled } from "styled-system/jsx";
+ 
+ import { Markdown } from "@revolt/markdown";
+@@ -31,7 +32,8 @@ export function ProfileBio(props: Props) {
+         </Show>
+ 
+         <Text class="title" size="large">
+-          Bio
++          {/* Bare literal, so it never reached the catalog. */}
++          <Trans>Bio</Trans>
+         </Text>
+ 
+         <Bio>
+diff --git a/packages/client/components/ui/components/features/profiles/ProfileCard.tsx b/packages/client/components/ui/components/features/profiles/ProfileCard.tsx
+index fc9cfb08..37753b21 100644
+--- a/packages/client/components/ui/components/features/profiles/ProfileCard.tsx
++++ b/packages/client/components/ui/components/features/profiles/ProfileCard.tsx
+@@ -23,14 +23,22 @@ export const ProfileCard = styled("div", {
+   variants: {
+     width: {
+       1: {
+-        overflow: "hidden",
+-        aspectRatio: "1/1",
++        // Was aspectRatio 1/1 with overflow hidden. A forced square is only
++        // right when the content happens to fill it: a "Groups" card holding
++        // one small avatar rendered as a mostly-empty box, and anything
++        // taller than the square was silently cut off. Sizing to content
++        // fixes both directions.
++        minWidth: 0,
+       },
+       2: {
+         gridColumn: "1 / 3",
+       },
+       3: {
+-        gridColumn: "1 / 4",
++        // Not "1 / 4": this card is used in two grids, the profile modal's
++        // three columns and the hover card's two. A hardcoded line 4 in a
++        // two-column grid conjures a phantom third column and squeezes
++        // everything else into a strip. -1 is the last line, whatever it is.
++        gridColumn: "1 / -1",
+       },
+     },
+     constraint: {
+diff --git a/packages/client/components/ui/components/features/profiles/ProfileMutuals.tsx b/packages/client/components/ui/components/features/profiles/ProfileMutuals.tsx
+index ed8b7ae8..d198822e 100644
+--- a/packages/client/components/ui/components/features/profiles/ProfileMutuals.tsx
++++ b/packages/client/components/ui/components/features/profiles/ProfileMutuals.tsx
+@@ -1,5 +1,6 @@
+ import { For, Show } from "solid-js";
+ 
++import { Trans } from "@lingui-solid/solid/macro";
+ import { useQuery } from "@tanstack/solid-query";
+ import { ServerMember, User } from "stoat.js";
+ import { styled } from "styled-system/jsx";
+@@ -69,12 +70,20 @@ export function ProfileMutuals(props: { user: User; member?: ServerMember }) {
+ 
+   return (
+     <>
++      {/*
++        Both titles were bare literals, so neither ever reached the catalog.
++
++        width=3 because these are horizontal strips of avatars: as a 1/3-column
++        tile a single shared group rendered one 20px avatar adrift in a large
++        empty box. Spanning the row, at a size you can actually recognise a
++        face at, they read as a row of people rather than as a gap.
++      */}
+       <Show when={query.data?.users.length}>
+-        <ProfileCard isLink onClick={openFriends}>
++        <ProfileCard isLink onClick={openFriends} width={3}>
+           <Ripple />
+ 
+           <Text class="title" size="large">
+-            Mutuals
++            <Trans>Mutual friends</Trans>
+           </Text>
+           <Grid>
+             <For each={query.data?.users}>
+@@ -82,7 +91,7 @@ export function ProfileMutuals(props: { user: User; member?: ServerMember }) {
+                 <Avatar
+                   src={user?.animatedAvatarURL}
+                   fallback={user?.displayName}
+-                  size={20}
++                  size={32}
+                 />
+               )}
+             </For>
+@@ -90,11 +99,11 @@ export function ProfileMutuals(props: { user: User; member?: ServerMember }) {
+         </ProfileCard>
+       </Show>
+       <Show when={query.data?.groups.length}>
+-        <ProfileCard isLink onClick={openGroups}>
++        <ProfileCard isLink onClick={openGroups} width={3}>
+           <Ripple />
+ 
+           <Text class="title" size="large">
+-            Groups
++            <Trans>Mutual groups</Trans>
+           </Text>
+           <Grid>
+             <For each={query.data?.groups}>
+@@ -102,7 +111,7 @@ export function ProfileMutuals(props: { user: User; member?: ServerMember }) {
+                 <Avatar
+                   src={group.animatedIconURL}
+                   fallback={group.name}
+-                  size={20}
++                  size={32}
+                 />
+               )}
+             </For>
+-- 
+2.49.0.windows.1
+

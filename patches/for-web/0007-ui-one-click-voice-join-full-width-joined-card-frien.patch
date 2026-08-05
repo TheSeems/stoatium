@@ -1,0 +1,501 @@
+From 9deb5f46ec2ea8e09428bbe02b9dedca5caa1199 Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Wed, 5 Aug 2026 18:57:18 +0300
+Subject: [PATCH] ui: one-click voice join, full-width joined card, friends tab
+ row
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Three unrelated complaints, three unrelated causes.
+
+Voice channels took two clicks to join: the sidebar entry only navigated,
+and connecting needed a second click on the call card's join preview. The
+sidebar entry now connects on the same click, guarded on inCall() because
+connect() starts by calling disconnect().
+
+The profile "Joined" card is a width=1 tile: a square with overflow hidden,
+about 165px across in the modal's three-column grid. That is narrower than
+the Russian heading "Присоединившиеся", so it broke mid-word -- and with no
+roles, status, badges or mutuals to sit beside it, the lone tile stranded
+itself in the left column. It now spans the row and lays its dates out
+side by side. Its hardcoded "Stoat" label became "Account created": this is
+a debranded build, and the label describes when the account was made.
+
+The friends page filter was a 72px navigation rail whose every label is
+wider than the rail itself, so they wrapped and crowded while the fixed
+width carved a dead column out of an empty pane. Replaced with a horizontal
+tab row that can be as wide as its labels.
+
+Also corrects "Acknowledge", which read "Знание" (knowledge) rather than an
+acknowledgement.
+---
+ .../components/i18n/catalogs/ru/messages.po   |   6 +-
+ .../features/profiles/ProfileJoined.tsx       | 110 ++++----
+ packages/client/src/interface/Friends.tsx     | 236 +++++++++++++-----
+ .../navigation/channels/ServerSidebar.tsx     |  12 +
+ 4 files changed, 265 insertions(+), 99 deletions(-)
+
+diff --git a/packages/client/components/i18n/catalogs/ru/messages.po b/packages/client/components/i18n/catalogs/ru/messages.po
+index 4cfae80b..bd665a42 100644
+--- a/packages/client/components/i18n/catalogs/ru/messages.po
++++ b/packages/client/components/i18n/catalogs/ru/messages.po
+@@ -342,9 +342,13 @@ msgstr "Принять"
+ msgid "Accept friend request"
+ msgstr "Принять заявку в друзья"
+ 
++#: components/ui/components/features/profiles/ProfileJoined.tsx
++msgid "Account created"
++msgstr "Аккаунт создан"
++
+ #: components/modal/modals/PolicyChange.tsx
+ msgid "Acknowledge"
+-msgstr "Знание"
++msgstr "Понятно"
+ 
+ #: components/modal/modals/AddMembersToGroup.tsx
+ #: components/modal/modals/AddBot.tsx
+diff --git a/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx b/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx
+index f8361a48..06e60fbb 100644
+--- a/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx
++++ b/packages/client/components/ui/components/features/profiles/ProfileJoined.tsx
+@@ -15,62 +15,88 @@ import { ProfileCard } from "./ProfileCard";
+ export function ProfileJoined(props: { user: User; member?: ServerMember }) {
+   const dayjs = useTime();
+ 
++  /**
++   * dayjs' L format is locale-dependent and Russian's is DD.MM.YYYY. Swapping
++   * MM for MMM gives an abbreviated month name; every separator then has to
++   * go, not just / and -, because leaving the dots in produced "02.авг..2026"
++   * -- the separator dot, then the one the ru locale puts on the abbreviated
++   * month itself.
++   */
++  const format = (date: Date) =>
++    dayjs(date).format(
++      timeLocale()[1].formats.L?.replace("MM", "MMM").replaceAll(/[/.-]/g, " "),
++    );
++
+   return (
+-    <ProfileCard>
+-      {/*
+-        Not <Text size="large">: this card is a 1/1 tile with overflow hidden,
+-        sized around the English "Joined". Russian's "Присоединился" is a
+-        single 13-character word, so at that size it overflowed the tile and
+-        was clipped mid-word. Wrapping and a slightly smaller size keep it
+-        inside without touching the shared Text component.
+-      */}
++    // width=3 spans the profile modal's three-column grid.
++    //
++    // At the default width=1 this is a square tile with overflow hidden, about
++    // 165px wide, which is narrower than the Russian heading
++    // "Присоединившиеся" -- so the title broke mid-word. And because a user
++    // with no roles, status, badges or mutuals renders nothing beside it, the
++    // lone tile stranded itself in the left column of an otherwise empty grid.
++    // Spanning the row fixes both: the heading fits on one line, and the card
++    // fills the modal instead of hugging one corner.
++    <ProfileCard width={3}>
+       <CardTitle>
+         <Trans>Joined</Trans>
+       </CardTitle>
+-      <Text class="label">
+-        <OverflowingText>Stoat</OverflowingText>
+-        {/* <Trans>Account Created</Trans> */}
+-      </Text>
+-      <Text>
+-        {dayjs(props.user.createdAt).format(
+-          timeLocale()[1]
+-            .formats.L?.replace("MM", "MMM")
+-            .replaceAll(/[/.-]/g, " "),
+-        )}
+-      </Text>
+-      <Show when={props.member}>
+-        <Text class="label">
+-          <OverflowingText>{props.member!.server!.name}</OverflowingText>
+-          {/* <Trans>Member Since</Trans> */}
+-        </Text>
+-        <Text>
+-          {dayjs(props.member!.joinedAt).format(
+-            timeLocale()[1]
+-              .formats.L?.replace("MM", "MMM")
+-              // Every separator, not just / and -. Russian's L format is
+-              // DD.MM.YYYY, so leaving "." in place produced "02.авг..2026":
+-              // the separator dot, then the one dayjs's ru locale puts on the
+-              // abbreviated month itself.
+-              .replaceAll(/[/.-]/g, " "),
+-          )}
+-        </Text>
+-      </Show>
++      <Entries>
++        <Entry>
++          <Text class="label">
++            {/*
++              Was a hardcoded "Stoat". This is a debranded build, and the label
++              is describing when the account was made, not which product made
++              it.
++            */}
++            <Trans>Account created</Trans>
++          </Text>
++          <Text>{format(props.user.createdAt)}</Text>
++        </Entry>
++        <Show when={props.member}>
++          <Entry>
++            <Text class="label">
++              <OverflowingText>{props.member!.server!.name}</OverflowingText>
++            </Text>
++            <Text>{format(props.member!.joinedAt)}</Text>
++          </Entry>
++        </Show>
++      </Entries>
+     </ProfileCard>
+   );
+ }
+ 
+ /**
+- * Heading for the joined-date tile.
+- *
+- * Sized to survive a long single-word translation inside a fixed-aspect tile.
++ * Heading for the joined-date card.
+  */
+ const CardTitle = styled("div", {
+   base: {
+     fontWeight: 600,
+-    fontSize: "0.95rem",
++    fontSize: "1rem",
+     lineHeight: 1.2,
+-    whiteSpace: "normal",
+-    overflowWrap: "anywhere",
+     color: "var(--md-sys-color-on-surface)",
+   },
+ });
++
++/**
++ * Dates sit side by side across the full-width card rather than stacked, so
++ * the card fills its row instead of leaving a long empty tail.
++ */
++const Entries = styled("div", {
++  base: {
++    display: "flex",
++    flexWrap: "wrap",
++    gap: "var(--gap-lg)",
++    marginBlockStart: "var(--gap-sm)",
++  },
++});
++
++const Entry = styled("div", {
++  base: {
++    minWidth: 0,
++    flex: "1 1 140px",
++    display: "flex",
++    flexDirection: "column",
++    gap: "2px",
++  },
++});
+diff --git a/packages/client/src/interface/Friends.tsx b/packages/client/src/interface/Friends.tsx
+index bbb985c4..0f36f865 100644
+--- a/packages/client/src/interface/Friends.tsx
++++ b/packages/client/src/interface/Friends.tsx
+@@ -19,15 +19,12 @@ import { useClient } from "@revolt/client";
+ import { useModals } from "@revolt/modal";
+ import {
+   Avatar,
+-  Badge,
++  Button,
+   Deferred,
+   Header,
+-  IconButton,
+   List,
+   ListItem,
+   ListSubheader,
+-  NavigationRail,
+-  NavigationRailItem,
+   OverflowingText,
+   UserStatus,
+   main,
+@@ -46,10 +43,13 @@ const Base = styled("div", {
+     flexDirection: "column",
+ 
+     "& .FriendsList": {
+-      height: "100%",
++      // flex child of Content, below the tab row: grow into the remaining
++      // height rather than claiming 100% of the parent and overflowing it.
++      flex: 1,
++      minHeight: 0,
+       width: "100%",
+       paddingInline: "var(--gap-x)",
+-      paddingBlock: "var(--gap-l)",
++      paddingBottom: "var(--gap-l)",
+       // Left-aligned against a wide viewport the list sat in the top-left
+       // corner of a mostly empty pane. Centring it with a measure cap keeps
+       // rows a readable length instead of stretching them edge to edge.
+@@ -119,58 +119,74 @@ export function Friends() {
+       </Header>
+ 
+       <main class={main()}>
+-        <div
+-          style={{
+-            position: "relative",
+-            "min-height": 0,
+-          }}
+-        >
+-          <NavigationRail contained value={page} onValue={setPage}>
+-            <div style={{ "margin-top": "6px", "margin-bottom": "12px" }}>
+-              <IconButton
+-                variant="filled"
+-                shape="square"
+-                onPress={() =>
+-                  openModal({
+-                    type: "add_friend",
+-                    client: client(),
+-                  })
+-                }
+-                use:floating={{
+-                  tooltip: {
+-                    placement: "right",
+-                    content: t`Add a new friend`,
+-                  },
+-                }}
++        <Content>
++          {/*
++            Was a <NavigationRail contained>: a 72px vertical strip of stacked
++            icon-over-label items. Every label is wider than the rail -- the
++            Russian "Блокировки" especially -- so they wrapped and crowded
++            against each other, and the rail's fixed width carved a dead
++            column out of the left of an otherwise empty pane.
++
++            A horizontal tab row reads as the top of the list it filters, and
++            each tab can be as wide as its label needs.
++          */}
++          <Toolbar>
++            <Tabs role="tablist">
++              <Tab
++                role="tab"
++                active={page() === "online"}
++                onClick={() => setPage("online")}
+               >
+-                <Symbol>add</Symbol>
+-              </IconButton>
+-            </div>
++                <Symbol>waving_hand</Symbol>
++                <Trans>Online</Trans>
++              </Tab>
++              <Tab
++                role="tab"
++                active={page() === "all"}
++                onClick={() => setPage("all")}
++              >
++                <Symbol>all_inbox</Symbol>
++                <Trans>All</Trans>
++              </Tab>
++              <Tab
++                role="tab"
++                active={page() === "pending"}
++                onClick={() => setPage("pending")}
++              >
++                <Symbol>notifications</Symbol>
++                <Trans>Pending</Trans>
++                {/*
++                  Not <Badge>: that wraps mdui-badge, which is built to be
++                  placed in a host component's "badge" slot and positions
++                  itself accordingly. Inline in a tab it needs to be an
++                  ordinary chip.
++                */}
++                <Show when={pending()}>
++                  <Count>{pending()}</Count>
++                </Show>
++              </Tab>
++              <Tab
++                role="tab"
++                active={page() === "blocked"}
++                onClick={() => setPage("blocked")}
++              >
++                <Symbol>block</Symbol>
++                <Trans>Blocked</Trans>
++              </Tab>
++            </Tabs>
+ 
+-            <NavigationRailItem
+-              icon={<Symbol>waving_hand</Symbol>}
+-              value="online"
+-            >
+-              <Trans>Online</Trans>
+-            </NavigationRailItem>
+-            <NavigationRailItem icon={<Symbol>all_inbox</Symbol>} value="all">
+-              <Trans>All</Trans>
+-            </NavigationRailItem>
+-            <NavigationRailItem
+-              icon={<Symbol>notifications</Symbol>}
+-              value="pending"
++            <Button
++              onPress={() =>
++                openModal({
++                  type: "add_friend",
++                  client: client(),
++                })
++              }
+             >
+-              <Trans>Pending</Trans>
+-              <Show when={pending()}>
+-                <Badge slot="badge" variant="large">
+-                  {pending()}
+-                </Badge>
+-              </Show>
+-            </NavigationRailItem>
+-            <NavigationRailItem icon={<Symbol>block</Symbol>} value="blocked">
+-              <Trans>Blocked</Trans>
+-            </NavigationRailItem>
+-          </NavigationRail>
++              <Symbol>person_add</Symbol>
++              {t`Add a new friend`}
++            </Button>
++          </Toolbar>
+ 
+           <Deferred>
+             <div class="FriendsList" ref={scrollTargetElement} use:scrollable>
+@@ -212,12 +228,120 @@ export function Friends() {
+               </Switch>
+             </div>
+           </Deferred>
+-        </div>
++        </Content>
+       </main>
+     </Base>
+   );
+ }
+ 
++/**
++ * Column holding the tab row above the scrolling list.
++ *
++ * min-height 0 so the list, not this element, is what scrolls -- a flex child
++ * defaults to min-height:auto and would otherwise refuse to shrink, pushing
++ * the overflow up and breaking the virtual list's scroll target.
++ */
++const Content = styled("div", {
++  base: {
++    flex: 1,
++    minHeight: 0,
++    display: "flex",
++    flexDirection: "column",
++  },
++});
++
++/**
++ * Tab row plus the add-friend action.
++ */
++const Toolbar = styled("div", {
++  base: {
++    display: "flex",
++    flexWrap: "wrap",
++    alignItems: "center",
++    justifyContent: "space-between",
++    gap: "var(--gap-md)",
++
++    maxWidth: "960px",
++    width: "100%",
++    marginInline: "auto",
++    paddingInline: "var(--gap-x)",
++    paddingBlock: "var(--gap-l)",
++  },
++});
++
++const Tabs = styled("div", {
++  base: {
++    display: "flex",
++    flexWrap: "wrap",
++    gap: "var(--gap-sm)",
++    padding: "4px",
++    borderRadius: "var(--borderRadius-full)",
++    background: "var(--md-sys-color-surface-container-low)",
++  },
++});
++
++/**
++ * Pending-request count shown inside its tab.
++ */
++const Count = styled("span", {
++  base: {
++    minWidth: "20px",
++    paddingInline: "6px",
++    borderRadius: "var(--borderRadius-full)",
++
++    fontSize: "0.75rem",
++    fontWeight: 600,
++    lineHeight: "20px",
++    textAlign: "center",
++
++    background: "var(--md-sys-color-error)",
++    color: "var(--md-sys-color-on-error)",
++  },
++});
++
++const Tab = styled("button", {
++  base: {
++    display: "flex",
++    alignItems: "center",
++    gap: "var(--gap-sm)",
++    whiteSpace: "nowrap",
++
++    border: "none",
++    cursor: "pointer",
++    font: "inherit",
++    fontWeight: 500,
++    paddingInline: "var(--gap-lg)",
++    paddingBlock: "var(--gap-md)",
++    borderRadius: "var(--borderRadius-full)",
++
++    background: "transparent",
++    color: "var(--md-sys-color-on-surface-variant)",
++    transition: "background .15s, color .15s",
++
++    "&:hover": {
++      background: "var(--md-sys-color-surface-container-high)",
++      color: "var(--md-sys-color-on-surface)",
++    },
++  },
++  variants: {
++    active: {
++      true: {
++        // Paired tokens: on-secondary-container is defined as the readable
++        // foreground for secondary-container. Picking the background alone
++        // and leaving the inherited colour is what made earlier selected
++        // states wash out.
++        background: "var(--md-sys-color-secondary-container)",
++        color: "var(--md-sys-color-on-secondary-container)",
++
++        "&:hover": {
++          background: "var(--md-sys-color-secondary-container)",
++          color: "var(--md-sys-color-on-secondary-container)",
++        },
++      },
++    },
++  },
++});
++
+ /**
+  * List of users
+  */
+diff --git a/packages/client/src/interface/navigation/channels/ServerSidebar.tsx b/packages/client/src/interface/navigation/channels/ServerSidebar.tsx
+index fa1ef5af..3b81ba53 100644
+--- a/packages/client/src/interface/navigation/channels/ServerSidebar.tsx
++++ b/packages/client/src/interface/navigation/channels/ServerSidebar.tsx
+@@ -494,6 +494,18 @@ function Entry(
+     <Column gap="sm">
+       <MenuButton
+         href={`/server/${props.channel.serverId}/channel/${props.channel.id}`}
++        onClick={() => {
++          // Joining a voice channel used to take two clicks: one here to open
++          // the channel, then another on the call card's "Join the voice
++          // channel" preview. Connect on the same click that navigates.
++          //
++          // Guarded on inCall(): connect() begins by calling disconnect(), so
++          // clicking the channel you are already in would drop the call and
++          // immediately rejoin it.
++          if (props.channel.isVoice && !inCall()) {
++            voice.connect(props.channel);
++          }
++        }}
+         use:floating={props.menuGenerator(props.channel)}
+         size="normal"
+         alert={alertState()}
+-- 
+2.49.0.windows.1
+
