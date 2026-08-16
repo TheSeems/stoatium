@@ -1,6 +1,6 @@
 # Branded assets
 
-Drop your own icons here. `scripts/prepare.ps1` copies this directory over
+Drop your own icons here. `scripts/prepare.sh` copies this directory over
 `assets/desktop/` in the upstream tree after checkout, so anything you place
 here wins.
 

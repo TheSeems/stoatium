@@ -1,0 +1,140 @@
+From 9e7ebdc08d3e6b3f706280838af647e346cd5fc3 Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Sun, 16 Aug 2026 15:49:35 +0200
+Subject: [PATCH] feat: make the GIF picker follow VITE_GIFBOX_URL
+
+Upstream falls back to api.gifbox.me whenever the variable is unset, so a
+self-hosted instance either proxies someone else's service or -- if it sets
+the variable empty, as this deployment does -- ships a GIF tab whose every
+request goes to a relative URL and fails. Neither is a good default.
+
+env.GIFBOX_ENABLED now gates the composer's GIF button, the picker's tab row
+and the GifPicker itself, so an empty VITE_GIFBOX_URL removes the feature
+rather than breaking it. With one tab left the segmented control is dropped
+too and the emoji picker takes the whole panel.
+
+The check is a method call rather than a comparison on purpose: the bundle
+carries the "__VITE_GIFBOX_URL__" sentinel until docker/inject.js rewrites it
+at container start, and esbuild would fold a literal comparison at build time
+and freeze the answer. Verified against a real build -- the minified output
+keeps `i3.startsWith("http")` with `i3` still the sentinel.
+---
+ packages/client/components/common/lib/env.ts  | 17 +++++++--
+ .../picker/CompositionMediaPicker.tsx         | 38 ++++++++++---------
+ .../interface/channels/text/Composition.tsx   |  3 +-
+ 3 files changed, 36 insertions(+), 22 deletions(-)
+
+diff --git a/packages/client/components/common/lib/env.ts b/packages/client/components/common/lib/env.ts
+index 73d85d54..43d67479 100644
+--- a/packages/client/components/common/lib/env.ts
++++ b/packages/client/components/common/lib/env.ts
+@@ -3,6 +3,11 @@ const DEFAULT_API_URL =
+   (import.meta.env.VITE_API_URL as string) ??
+   "https://stoat.chat/api";
+ 
++const DEFAULT_GIFBOX_URL =
++  (import.meta.env.DEV ? import.meta.env.VITE_DEV_GIFBOX_URL : undefined) ??
++  (import.meta.env.VITE_GIFBOX_URL as string) ??
++  "https://api.gifbox.me";
++
+ export default {
+   /**
+    * Whether to emit additional debug information
+@@ -47,10 +52,14 @@ export default {
+   /**
+    * What gifbox server to connect to by default.
+    */
+-  DEFAULT_GIFBOX_URL:
+-    (import.meta.env.DEV ? import.meta.env.VITE_DEV_GIFBOX_URL : undefined) ??
+-    (import.meta.env.VITE_GIFBOX_URL as string) ??
+-    "https://api.gifbox.me",
++  DEFAULT_GIFBOX_URL,
++  /**
++   * Whether a GIF service is configured; leave VITE_GIFBOX_URL empty to hide
++   * the GIF button and picker tab entirely.
++   */
++  // A method call, not a comparison: the check must not fold at build time,
++  // while the sentinel still stands in for what inject.js writes at startup.
++  GIFBOX_ENABLED: DEFAULT_GIFBOX_URL.startsWith("http"),
+   /**
+    * hCaptcha site key to use if enabled
+    */
+diff --git a/packages/client/components/ui/components/features/messaging/composition/picker/CompositionMediaPicker.tsx b/packages/client/components/ui/components/features/messaging/composition/picker/CompositionMediaPicker.tsx
+index 7baf3902..45d56119 100644
+--- a/packages/client/components/ui/components/features/messaging/composition/picker/CompositionMediaPicker.tsx
++++ b/packages/client/components/ui/components/features/messaging/composition/picker/CompositionMediaPicker.tsx
+@@ -18,6 +18,7 @@ import { flip, offset, shift } from "@floating-ui/dom";
+ import { cva } from "styled-system/css";
+ import { styled } from "styled-system/jsx";
+ 
++import env from "@revolt/common/lib/env";
+ import { Button } from "@revolt/ui/components/design";
+ import { Row } from "@revolt/ui/components/layout";
+ 
+@@ -154,25 +155,28 @@ function Picker(
+       }
+     >
+       <Container>
+-        <Row justify class="CompositionButton">
+-          <Button
+-            groupActive={props.show() === "gif"}
+-            onPress={() => props.setShow("gif")}
+-            group="connected-start"
+-          >
+-            GIFs
+-          </Button>
+-          <Button
+-            groupActive={props.show() === "emoji"}
+-            onPress={() => props.setShow("emoji")}
+-            group="connected-end"
+-          >
+-            Emoji
+-          </Button>
+-        </Row>
++        {/* without GIFs this would be a segmented control of one */}
++        <Show when={env.GIFBOX_ENABLED}>
++          <Row justify class="CompositionButton">
++            <Button
++              groupActive={props.show() === "gif"}
++              onPress={() => props.setShow("gif")}
++              group="connected-start"
++            >
++              GIFs
++            </Button>
++            <Button
++              groupActive={props.show() === "emoji"}
++              onPress={() => props.setShow("emoji")}
++              group="connected-end"
++            >
++              Emoji
++            </Button>
++          </Row>
++        </Show>
+ 
+         <Switch fallback={<span>Not available yet.</span>}>
+-          <Match when={props.show() === "gif"}>
++          <Match when={env.GIFBOX_ENABLED && props.show() === "gif"}>
+             <GifPicker />
+           </Match>
+           <Match when={props.show() === "emoji"}>
+diff --git a/packages/client/src/interface/channels/text/Composition.tsx b/packages/client/src/interface/channels/text/Composition.tsx
+index 6377d85a..02dab438 100644
+--- a/packages/client/src/interface/channels/text/Composition.tsx
++++ b/packages/client/src/interface/channels/text/Composition.tsx
+@@ -18,6 +18,7 @@ import { styled } from "styled-system/jsx";
+ 
+ import { useClient } from "@revolt/client";
+ import { CONFIGURATION, debounce } from "@revolt/common";
++import env from "@revolt/common/lib/env";
+ import { Keybind, KeybindAction, createKeybind } from "@revolt/keybinds";
+ import { useModals } from "@revolt/modal";
+ import { useState } from "@revolt/state";
+@@ -477,7 +478,7 @@ export function MessageComposition(props: Props) {
+               >
+                 {(triggerProps) => (
+                   <>
+-                    <Show when={!canSend()}>
++                    <Show when={env.GIFBOX_ENABLED && !canSend()}>
+                       <MessageBox.InlineIcon>
+                         <IconButton onPress={triggerProps.onClickGif}>
+                           <Symbol>gif</Symbol>

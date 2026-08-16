@@ -1,0 +1,246 @@
+From eef19d9bdff8699e99c99e1ab92f9a34023e21ae Mon Sep 17 00:00:00 2001
+From: Stoatium Build <stoatium@localhost>
+Date: Sun, 16 Aug 2026 16:05:40 +0200
+Subject: [PATCH] debrand: drop the Gifbox explainer and the gifbox.me upsells
+
+The picker shipped upstream's marketing: a one-time "GIFs are now powered by
+Gifbox" card linking to stoat.gg, and two "Upload to Gifbox" buttons pointing
+at gifbox.me. None of that is true for a fork pointed at whatever GIF service
+VITE_GIFBOX_URL names, and the AGPL licenses none of those marks.
+
+Search, categories and sending are untouched; only the promotion and the
+styles it needed are gone. The two thrown errors now say "GIF" rather than
+naming the service.
+---
+ .../composition/picker/GifPicker.tsx          | 163 +-----------------
+ 1 file changed, 2 insertions(+), 161 deletions(-)
+
+diff --git a/packages/client/components/ui/components/features/messaging/composition/picker/GifPicker.tsx b/packages/client/components/ui/components/features/messaging/composition/picker/GifPicker.tsx
+index 5ef43588..e419d14a 100644
+--- a/packages/client/components/ui/components/features/messaging/composition/picker/GifPicker.tsx
++++ b/packages/client/components/ui/components/features/messaging/composition/picker/GifPicker.tsx
+@@ -16,9 +16,7 @@ import { styled } from "styled-system/jsx";
+ 
+ import { useClient } from "@revolt/client";
+ import env from "@revolt/common/lib/env";
+-import { useState } from "@revolt/state";
+ import {
+-  Button,
+   CircularProgress,
+   IconButton,
+   Text,
+@@ -29,21 +27,6 @@ import { Symbol } from "@revolt/ui/components/utils/Symbol";
+ 
+ import { CompositionMediaPickerContext } from "./CompositionMediaPicker";
+ 
+-/**
+- * Section ID used to persist permanent dismissal of the Gifbox explainer
+- */
+-const GIFBOX_EXPLAINER_DISMISS_KEY = "gifbox-explainer-dismissed";
+-
+-/**
+- * Link to more information about Gifbox
+- */
+-const GIFBOX_LEARN_MORE_URL = "https://stoat.gg/meet-gifbox";
+-
+-/**
+- * Link to upload GIFs to Gifbox
+- */
+-const GIFBOX_UPLOAD_URL = "https://gifbox.me/upload";
+-
+ type GifCategory = { title: string; image: string };
+ 
+ type GifResult = {
+@@ -60,7 +43,6 @@ export function GifPicker() {
+ 
+   return (
+     <Stack>
+-      <GifboxExplainer />
+       <SearchArea>
+         <Show when={filter()}>
+           <span
+@@ -119,93 +101,6 @@ const Stack = styled("div", {
+   },
+ });
+ 
+-/**
+- * One-time explainer letting people know GIFs are powered by Gifbox now.
+- */
+-function GifboxExplainer() {
+-  const state = useState();
+-
+-  // state can briefly be null while the picker is animating out and its reactive scope is being disposed, guard it!
+-  const dismissed = () =>
+-    state?.layout.getSectionState(GIFBOX_EXPLAINER_DISMISS_KEY, false) ?? false;
+-
+-  return (
+-    <Show when={!dismissed()}>
+-      <Explainer
+-        onMouseDown={(e) => {
+-          e.preventDefault();
+-          e.stopPropagation();
+-          e.stopImmediatePropagation();
+-        }}
+-      >
+-        <Text class="title" size="small">
+-          <Trans>GIFs are now powered by Gifbox</Trans>
+-        </Text>
+-        <ExplainerBody>
+-          <Trans>
+-            Gifbox is our own GIF service, so you can keep sharing GIFs right
+-            here on Stoat.
+-          </Trans>
+-        </ExplainerBody>
+-        <ExplainerActions>
+-          <Button
+-            variant="text"
+-            onPress={() =>
+-              window.open(
+-                GIFBOX_LEARN_MORE_URL,
+-                "_blank",
+-                "noopener,noreferrer",
+-              )
+-            }
+-          >
+-            <Trans>Learn more</Trans>
+-          </Button>
+-          <Button
+-            variant="filled"
+-            onPress={() =>
+-              state?.layout.setSectionState(GIFBOX_EXPLAINER_DISMISS_KEY, true)
+-            }
+-          >
+-            <Trans>Got it</Trans>
+-          </Button>
+-        </ExplainerActions>
+-      </Explainer>
+-    </Show>
+-  );
+-}
+-
+-const Explainer = styled("div", {
+-  base: {
+-    flexShrink: 0,
+-    display: "flex",
+-    flexDirection: "column",
+-    gap: "var(--gap-sm)",
+-
+-    marginInline: "var(--gap-md)",
+-    padding: "var(--gap-l)",
+-
+-    borderRadius: "var(--borderRadius-md)",
+-    background: "var(--md-sys-color-surface-container-high)",
+-    color: "var(--md-sys-color-on-surface)",
+-  },
+-});
+-
+-const ExplainerBody = styled("span", {
+-  base: {
+-    ...typography.raw({ class: "body", size: "small" }),
+-    color: "var(--md-sys-color-on-surface-variant)",
+-  },
+-});
+-
+-const ExplainerActions = styled("div", {
+-  base: {
+-    display: "flex",
+-    justifyContent: "end",
+-    gap: "var(--gap-sm)",
+-    marginTop: "var(--gap-xs)",
+-  },
+-});
+-
+ const SearchArea = styled("div", {
+   base: {
+     flexShrink: 0,
+@@ -336,7 +231,7 @@ function Categories() {
+           [authHeader]: authHeaderValue,
+         },
+       }).then((r) => {
+-        if (!r.ok) throw new Error(`Gifbox categories failed: ${r.status}`);
++        if (!r.ok) throw new Error(`GIF categories failed: ${r.status}`);
+         return r.json();
+       });
+     },
+@@ -461,7 +356,7 @@ function GifSearch(props: { query: string }) {
+         },
+       )
+         .then((r) => {
+-          if (!r.ok) throw new Error(`Gifbox search failed: ${r.status}`);
++          if (!r.ok) throw new Error(`GIF search failed: ${r.status}`);
+           return r.json();
+         })
+         .then((resp) => resp.results);
+@@ -484,22 +379,6 @@ function GifSearch(props: { query: string }) {
+           <Text class="title" size="small">
+             <Trans>No GIFs found</Trans>
+           </Text>
+-          <ExplainerBody>
+-            <Trans>
+-              Can't find the perfect GIF? Head to Gifbox and upload your own for
+-              everyone to use.
+-            </Trans>
+-          </ExplainerBody>
+-          <ButtonSpacing>
+-            <Button
+-              variant="filled"
+-              onPress={() =>
+-                window.open(GIFBOX_UPLOAD_URL, "_blank", "noopener,noreferrer")
+-              }
+-            >
+-              <Trans>Upload to Gifbox</Trans>
+-            </Button>
+-          </ButtonSpacing>
+         </Centered>
+       }
+     >
+@@ -528,49 +407,11 @@ function GifSearch(props: { query: string }) {
+             )}
+           </For>
+         </Masonry>
+-        <EndOfResults
+-          onMouseDown={(e) => {
+-            e.preventDefault();
+-            e.stopPropagation();
+-            e.stopImmediatePropagation();
+-          }}
+-        >
+-          <ExplainerBody>
+-            <Trans>Got a better GIF? Share it with everyone on Gifbox.</Trans>
+-          </ExplainerBody>
+-          <ButtonSpacing>
+-            <Button
+-              variant="text"
+-              onPress={() =>
+-                window.open(GIFBOX_UPLOAD_URL, "_blank", "noopener,noreferrer")
+-              }
+-            >
+-              <Trans>Upload to Gifbox</Trans>
+-            </Button>
+-          </ButtonSpacing>
+-        </EndOfResults>
+       </Scroller>
+     </Show>
+   );
+ }
+ 
+-const ButtonSpacing = styled("div", {
+-  base: {
+-    marginTop: "var(--gap-s)",
+-  },
+-});
+-
+-const EndOfResults = styled("div", {
+-  base: {
+-    display: "flex",
+-    flexDirection: "column",
+-    alignItems: "center",
+-    gap: "var(--gap-sm)",
+-    paddingBlock: "var(--gap-l)",
+-    textAlign: "center",
+-  },
+-});
+-
+ /**
+  * CSS column masonry — keeps each GIF's natural aspect ratio
+  */

@@ -18,7 +18,7 @@ quality; it needs no patch to be *configurable*, since upstream substitutes
 
 ## Design: patch series, not a fork
 
-No upstream source is vendored. `scripts/prepare.ps1` clones a pinned tag and
+No upstream source is vendored. `scripts/prepare.sh` clones a pinned tag and
 applies the patch series, the way VSCodium does. Bumping upstream is `git am`,
 and conflicts surface as failed patches at a moment you chose rather than as
 silent drift.
@@ -27,25 +27,25 @@ silent drift.
 brand.env              branding + your instance URL
 upstream.env           pinned upstream tags
 patches/for-desktop/   3 patches: runtime URL, debranding, opt-in updates
-patches/for-web/       11 patches: ru catalog, UI, media quality
+patches/for-web/       13 patches: ru catalog, UI, media quality, optional GIFs
 brand/desktop/         your icons, overlaid onto upstream's assets
 scripts/               prepare, build, regen-patches
 ```
 
 ## Build
 
-PowerShell 7+, Node 22+, pnpm 11+, git.
+Bash 3.2+, Node 22+, pnpm 11+, git. On Windows use Git Bash or WSL.
 
-```powershell
+```bash
 # edit brand.env -> STOATIUM_SERVER_URL, then:
-./scripts/build.ps1 -Prepare
+./scripts/build.sh --prepare
 ```
 
 Artifacts land in `build/for-desktop/out/make`: a Squirrel installer and ZIP on
 Windows, ZIP on Linux. Builds are unsigned, so SmartScreen will warn.
 
 The appx, flatpak and deb makers are skipped by default — they need toolchains
-absent on stock machines and CI runners. `-AllTargets` enables them; AppX
+absent on stock machines and CI runners. `--all-targets` enables them; AppX
 self-signs and cannot be installed without trusting the generated certificate
 first, so it is not a distribution path without your own signing identity.
 
@@ -53,14 +53,18 @@ The web client is built separately: apply `patches/for-web/` to upstream
 `for-web` at the pinned revision and build its Dockerfile. Deployment
 manifests are instance-specific and are not published here.
 
+Its runtime env doubles as feature flags: an empty `VITE_GIFBOX_URL` now hides
+the composer's GIF button and the picker's GIFs tab, so an instance that runs
+no gifbox does not advertise one.
+
 ## Changing a patch
 
-```powershell
+```bash
 # edit files in build/for-desktop, commit there, then:
-./scripts/regen-patches.ps1
+./scripts/regen-patches.sh
 ```
 
-Bumping upstream is `upstream.env` then `./scripts/prepare.ps1 -Force`. A patch
+Bumping upstream is `upstream.env` then `./scripts/prepare.sh --force`. A patch
 that no longer applies aborts with the filename.
 
 The web catalog has its own generator: `scripts/regen-web-catalog.mjs` verifies

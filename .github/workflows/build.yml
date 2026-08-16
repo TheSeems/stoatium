@@ -42,12 +42,12 @@ jobs:
       # Clone upstream at the pinned tag and apply the patch series. A patch
       # that no longer applies fails the build here, which is the point.
       - name: Apply patches
-        shell: pwsh
-        run: ./scripts/prepare.ps1 -Force
+        shell: bash
+        run: ./scripts/prepare.sh --force
 
       - name: Build
-        shell: pwsh
-        run: ./scripts/build.ps1
+        shell: bash
+        run: ./scripts/build.sh
 
       - uses: actions/upload-artifact@v4
         with:

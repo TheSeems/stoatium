@@ -1,4 +1,4 @@
-# Upstream is cloned, never vendored. scripts/prepare.ps1 recreates it.
+# Upstream is cloned, never vendored. scripts/prepare.sh recreates it.
 /build/
 
 node_modules/
